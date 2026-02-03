@@ -56,9 +56,9 @@ export default function LoginPage() {
           <div className="flex flex-col items-center space-y-4">
             <img src={bitechLogo} alt="Bitech" className="h-12 w-auto" />
             <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight">Data Access Platform</h1>
+              <h1 className="text-2xl font-bold tracking-tight">DC4AI</h1>
               <p className="text-muted-foreground mt-1">
-                Secure access to your organizational data
+                Data Collection 4 Artificial Intelligence
               </p>
             </div>
           </div>
