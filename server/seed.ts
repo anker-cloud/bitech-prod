@@ -18,7 +18,7 @@ export async function seedDatabase() {
     dataSourceId: ds.id,
     hasAccess: true,
     tables: [{
-      tableName: ds.id.replace("-data-db", ""),
+      tableName: ds.tableName,
       columns: [],
       allColumns: true,
     }],
@@ -48,7 +48,7 @@ export async function seedDatabase() {
       dataSourceId: "events-data-db",
       hasAccess: true,
       tables: [{
-        tableName: "events",
+        tableName: "event_data_prd_silver",
         columns: [],
         allColumns: true,
       }],
@@ -57,7 +57,7 @@ export async function seedDatabase() {
       dataSourceId: "traffic-data-db",
       hasAccess: true,
       tables: [{
-        tableName: "traffic",
+        tableName: "traffic_data_prd_silver",
         columns: [],
         allColumns: true,
       }],
@@ -66,15 +66,6 @@ export async function seedDatabase() {
       dataSourceId: "weather-data-db",
       hasAccess: false,
       tables: [],
-    },
-    {
-      dataSourceId: "insurance-data-db",
-      hasAccess: true,
-      tables: [{
-        tableName: "insurance",
-        columns: ["policy_id", "policy_type", "region", "start_date"],
-        allColumns: false,
-      }],
     },
   ];
 
@@ -90,7 +81,7 @@ export async function seedDatabase() {
       dataSourceId: "crime-data-db",
       hasAccess: true,
       tables: [{
-        tableName: "crime",
+        tableName: "crime_data_prd_silver",
         columns: [],
         allColumns: true,
       }],
@@ -99,7 +90,7 @@ export async function seedDatabase() {
       dataSourceId: "events-data-db",
       hasAccess: true,
       tables: [{
-        tableName: "events",
+        tableName: "event_data_prd_silver",
         columns: [],
         allColumns: true,
       }],
@@ -108,7 +99,7 @@ export async function seedDatabase() {
       dataSourceId: "traffic-data-db",
       hasAccess: true,
       tables: [{
-        tableName: "traffic",
+        tableName: "traffic_data_prd_silver",
         columns: [],
         allColumns: true,
       }],
@@ -117,15 +108,10 @@ export async function seedDatabase() {
       dataSourceId: "weather-data-db",
       hasAccess: true,
       tables: [{
-        tableName: "weather",
+        tableName: "weather_data_prd_silver",
         columns: [],
         allColumns: true,
       }],
-    },
-    {
-      dataSourceId: "insurance-data-db",
-      hasAccess: false,
-      tables: [],
     },
   ];
 

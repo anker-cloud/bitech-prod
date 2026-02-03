@@ -14,60 +14,6 @@ const client = new GlueClient({
   },
 });
 
-const isDemoMode = process.env.DEMO_MODE === "true" || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY;
-
-const DEMO_SCHEMAS: Record<string, TableColumn[]> = {
-  "crime-data-db": [
-    { name: "incident_id", type: "string" },
-    { name: "incident_date", type: "timestamp" },
-    { name: "incident_type", type: "string" },
-    { name: "location", type: "string" },
-    { name: "district", type: "string" },
-    { name: "severity", type: "int" },
-    { name: "status", type: "string" },
-    { name: "reported_by", type: "string" },
-  ],
-  "events-data-db": [
-    { name: "event_id", type: "string" },
-    { name: "event_name", type: "string" },
-    { name: "event_date", type: "timestamp" },
-    { name: "venue", type: "string" },
-    { name: "category", type: "string" },
-    { name: "attendees", type: "int" },
-    { name: "organizer", type: "string" },
-    { name: "status", type: "string" },
-  ],
-  "traffic-data-db": [
-    { name: "record_id", type: "string" },
-    { name: "timestamp", type: "timestamp" },
-    { name: "intersection", type: "string" },
-    { name: "vehicle_count", type: "int" },
-    { name: "average_speed", type: "double" },
-    { name: "congestion_level", type: "string" },
-    { name: "weather_condition", type: "string" },
-  ],
-  "weather-data-db": [
-    { name: "observation_id", type: "string" },
-    { name: "observation_time", type: "timestamp" },
-    { name: "station", type: "string" },
-    { name: "temperature", type: "double" },
-    { name: "humidity", type: "double" },
-    { name: "wind_speed", type: "double" },
-    { name: "precipitation", type: "double" },
-    { name: "conditions", type: "string" },
-  ],
-  "insurance-data-db": [
-    { name: "claim_id", type: "string" },
-    { name: "claim_date", type: "timestamp" },
-    { name: "policy_number", type: "string" },
-    { name: "claim_type", type: "string" },
-    { name: "amount", type: "double" },
-    { name: "status", type: "string" },
-    { name: "customer_id", type: "string" },
-    { name: "region", type: "string" },
-  ],
-};
-
 export interface TableColumn {
   name: string;
   type: string;
@@ -87,22 +33,6 @@ export async function getDataSourceSchemas(): Promise<DataSourceSchema[]> {
   const schemas: DataSourceSchema[] = [];
 
   for (const dataSource of DATA_SOURCES) {
-    if (isDemoMode) {
-      const demoColumns = DEMO_SCHEMAS[dataSource.id] || [
-        { name: "id", type: "string" },
-        { name: "created_at", type: "timestamp" },
-        { name: "data", type: "string" },
-      ];
-      schemas.push({
-        dataSourceId: dataSource.id,
-        tables: [{
-          name: dataSource.id.replace("-data-db", ""),
-          columns: demoColumns,
-        }],
-      });
-      continue;
-    }
-
     try {
       const tablesCommand = new GetTablesCommand({
         DatabaseName: dataSource.id,
@@ -128,16 +58,10 @@ export async function getDataSourceSchemas(): Promise<DataSourceSchema[]> {
         tables,
       });
     } catch (error) {
+      console.error(`Error fetching schema for ${dataSource.id}:`, error);
       schemas.push({
         dataSourceId: dataSource.id,
-        tables: [{
-          name: dataSource.id.replace("-data-db", ""),
-          columns: [
-            { name: "id", type: "string" },
-            { name: "created_at", type: "timestamp" },
-            { name: "data", type: "string" },
-          ]
-        }],
+        tables: [],
       });
     }
   }

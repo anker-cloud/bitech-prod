@@ -4,11 +4,10 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const DATA_SOURCES = [
-  { id: "crime-data-db", name: "Crime", description: "Crime statistics and incident data" },
-  { id: "events-data-db", name: "Events", description: "Event scheduling and tracking data" },
-  { id: "traffic-data-db", name: "Traffic", description: "Traffic flow and incident data" },
-  { id: "weather-data-db", name: "Weather", description: "Weather conditions and forecasts" },
-  { id: "insurance-data-db", name: "Insurance", description: "Policy holder and claims data" },
+  { id: "crime-data-db", name: "Crime Data", description: "Crime statistics and incident data", tableName: "crime_data_prd_silver" },
+  { id: "events-data-db", name: "Events Data", description: "Event scheduling and tracking data", tableName: "event_data_prd_silver" },
+  { id: "traffic-data-db", name: "Traffic Data", description: "Traffic flow and incident data", tableName: "traffic_data_prd_silver" },
+  { id: "weather-data-db", name: "Weather Data", description: "Weather conditions and forecasts", tableName: "weather_data_prd_silver" },
 ] as const;
 
 export type DataSourceId = typeof DATA_SOURCES[number]["id"];

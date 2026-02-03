@@ -15,7 +15,6 @@ const client = new AthenaClient({
 });
 
 const outputLocation = process.env.ATHENA_OUTPUT_LOCATION || "s3://aws-athena-query-results/";
-const isDemoMode = process.env.DEMO_MODE === "true" || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY;
 
 export interface QueryResult {
   columns: string[];
@@ -54,24 +53,6 @@ async function waitForQueryCompletion(queryExecutionId: string): Promise<void> {
 
 export async function executeQuery(sql: string, databaseName: string): Promise<QueryResult> {
   const startTime = Date.now();
-
-  if (isDemoMode) {
-    console.log(`[Demo Mode] Would execute query on ${databaseName}: ${sql.substring(0, 100)}...`);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    return {
-      columns: ["id", "name", "created_at", "status"],
-      rows: [
-        { id: "1", name: "Sample Record 1", created_at: "2024-01-15 10:30:00", status: "active" },
-        { id: "2", name: "Sample Record 2", created_at: "2024-01-16 14:45:00", status: "pending" },
-        { id: "3", name: "Sample Record 3", created_at: "2024-01-17 09:15:00", status: "active" },
-        { id: "4", name: "Sample Record 4", created_at: "2024-01-18 16:20:00", status: "inactive" },
-        { id: "5", name: "Sample Record 5", created_at: "2024-01-19 11:00:00", status: "active" },
-      ],
-      totalRows: 5,
-      executionTimeMs: Date.now() - startTime,
-    };
-  }
 
   const startCommand = new StartQueryExecutionCommand({
     QueryString: sql,
