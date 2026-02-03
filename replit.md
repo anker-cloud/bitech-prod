@@ -40,9 +40,14 @@ Preferred communication style: Simple, everyday language.
 5. Auth middleware validates tokens and attaches user context
 
 ### Permission Model
-- Roles define access to data sources with table and column-level granularity
+- Roles define access to data sources with table, column, and row-level granularity
 - Each role has a `permissions` array containing `DataSourcePermission` objects
-- Admin roles bypass data source restrictions
+- Table permissions include:
+  - **Column Access**: `allColumns` toggle or specific column selection
+  - **Row Access**: `allRows` toggle or row filters with conditions (column, operator, value, AND/OR logic)
+- Supported row filter operators: equals (=), not_equals (!=), contains (LIKE), greater_than (>), less_than (<), in (IN)
+- Row filters are automatically injected into SQL queries at execution time
+- Admin roles bypass all data source restrictions
 - IAM roles and Lake Formation permissions sync with application roles
 
 ## External Dependencies
