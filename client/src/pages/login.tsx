@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 import { loginSchema, type LoginCredentials } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
 import bitechLogo from "@/assets/bitech-logo.png";
-import loginCharacter from "@/assets/images/login-character.png";
+import loginHeroFull from "@/assets/images/login-hero-full.png";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -52,26 +52,16 @@ export default function LoginPage() {
           <ThemeToggle />
         </div>
 
-        <div className="hidden md:flex w-1/2 bg-primary/10 items-center justify-center p-8 relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent" />
-          <div className="relative z-10">
-            <img 
-              src={loginCharacter} 
-              alt="AI Assistant" 
-              className="w-full max-w-sm h-auto"
-              data-testid="img-login-character"
-            />
-          </div>
-          <div className="absolute bottom-8 left-8 right-8">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-16 bg-primary/40 rounded-full" />
-              <div className="h-2 w-24 bg-primary/30 rounded-full" />
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="h-2 w-2 bg-primary/50 rounded-full" />
-              <div className="h-2 w-20 bg-primary/30 rounded-full" />
-            </div>
-          </div>
+        <div 
+          className="hidden md:block w-1/2 relative"
+          style={{
+            backgroundImage: `url(${loginHeroFull})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+          data-testid="section-login-hero"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/10" />
         </div>
 
         <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
