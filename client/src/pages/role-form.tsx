@@ -346,9 +346,6 @@ export default function RoleFormPage() {
                                               data-testid={`checkbox-column-${ds.id}-${table.name}-${column.name}`}
                                             />
                                             <span className="text-sm">{column.name}</span>
-                                            <Badge variant="outline" className="text-xs">
-                                              {column.type}
-                                            </Badge>
                                           </div>
                                         ))}
                                       </div>
