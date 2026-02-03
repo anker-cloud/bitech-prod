@@ -15,7 +15,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { DATA_SOURCES, type Role, type DataSourcePermission, type TablePermission } from "@shared/schema";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { RowFilterBuilder } from "@/components/row-filter-builder";
+import { DATA_SOURCES, type Role, type DataSourcePermission, type TablePermission, type RowFilterCondition } from "@shared/schema";
 
 interface TableInfo {
   name: string;
@@ -113,7 +115,7 @@ export default function RoleFormPage() {
           if (existingTable) return p;
           return {
             ...p,
-            tables: [...p.tables, { tableName, columns: [], allColumns: true }],
+            tables: [...p.tables, { tableName, columns: [], allColumns: true, allRows: true, rowFilters: [] }],
           };
         } else {
           return {
@@ -162,6 +164,43 @@ export default function RoleFormPage() {
               ...t,
               allColumns,
               columns: allColumns ? [] : columns.map((c) => c.name),
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const handleAllRowsToggle = (dataSourceId: string, tableName: string, allRows: boolean) => {
+    setPermissions((prev) =>
+      prev.map((p) => {
+        if (p.dataSourceId !== dataSourceId) return p;
+        return {
+          ...p,
+          tables: p.tables.map((t) => {
+            if (t.tableName !== tableName) return t;
+            return {
+              ...t,
+              allRows,
+              rowFilters: allRows ? [] : t.rowFilters || [],
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const handleRowFiltersChange = (dataSourceId: string, tableName: string, rowFilters: RowFilterCondition[]) => {
+    setPermissions((prev) =>
+      prev.map((p) => {
+        if (p.dataSourceId !== dataSourceId) return p;
+        return {
+          ...p,
+          tables: p.tables.map((t) => {
+            if (t.tableName !== tableName) return t;
+            return {
+              ...t,
+              rowFilters,
             };
           }),
         };
@@ -335,7 +374,7 @@ export default function RoleFormPage() {
                                       )}
                                     </div>
                                     {isTableSelected && !tablePermission?.allColumns && (
-                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pl-6">
+                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pl-6 mb-4">
                                         {table.columns.map((column) => (
                                           <div key={column.name} className="flex items-center gap-2">
                                             <Checkbox
@@ -348,6 +387,36 @@ export default function RoleFormPage() {
                                             <span className="text-sm">{column.name}</span>
                                           </div>
                                         ))}
+                                      </div>
+                                    )}
+                                    
+                                    {isTableSelected && (
+                                      <div className="border-t pt-4 mt-4 pl-6">
+                                        <Label className="text-sm font-medium mb-3 block">Row Access</Label>
+                                        <RadioGroup
+                                          value={tablePermission?.allRows !== false ? "all" : "filtered"}
+                                          onValueChange={(value) => handleAllRowsToggle(ds.id, table.name, value === "all")}
+                                          className="flex gap-6 mb-3"
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <RadioGroupItem value="all" id={`all-rows-${ds.id}-${table.name}`} data-testid={`radio-all-rows-${ds.id}-${table.name}`} />
+                                            <Label htmlFor={`all-rows-${ds.id}-${table.name}`} className="text-sm font-normal cursor-pointer">All Rows</Label>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            <RadioGroupItem value="filtered" id={`filtered-rows-${ds.id}-${table.name}`} data-testid={`radio-filtered-rows-${ds.id}-${table.name}`} />
+                                            <Label htmlFor={`filtered-rows-${ds.id}-${table.name}`} className="text-sm font-normal cursor-pointer">Filtered Rows</Label>
+                                          </div>
+                                        </RadioGroup>
+                                        
+                                        {tablePermission?.allRows === false && (
+                                          <div className="bg-muted/50 rounded-md p-4">
+                                            <RowFilterBuilder
+                                              columns={table.columns}
+                                              filters={tablePermission.rowFilters || []}
+                                              onChange={(filters) => handleRowFiltersChange(ds.id, table.name, filters)}
+                                            />
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>

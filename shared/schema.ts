@@ -12,10 +12,19 @@ export const DATA_SOURCES = [
 
 export type DataSourceId = typeof DATA_SOURCES[number]["id"];
 
+export interface RowFilterCondition {
+  column: string;
+  operator: "equals" | "not_equals" | "contains" | "greater_than" | "less_than" | "in";
+  value: string;
+  logic?: "AND" | "OR";
+}
+
 export interface TablePermission {
   tableName: string;
   columns: string[];
   allColumns: boolean;
+  allRows: boolean;
+  rowFilters?: RowFilterCondition[];
 }
 
 export interface DataSourcePermission {
