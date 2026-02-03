@@ -4,13 +4,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { loginSchema, type LoginCredentials } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
 import bitechLogo from "@/assets/bitech-logo.png";
+import loginHero from "@/assets/images/login-hero.png";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -46,31 +46,52 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="flex items-center justify-end p-4">
-        <ThemeToggle />
-      </header>
-      
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-8">
-          <div className="flex flex-col items-center space-y-4">
-            <img src={bitechLogo} alt="Bitech" className="h-12 w-auto" />
-            <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight">DC4AI</h1>
-              <p className="text-muted-foreground mt-1">
-                Data Collection 4 Artificial Intelligence
-              </p>
-            </div>
+    <div className="min-h-screen flex">
+      <div className="hidden lg:flex flex-1 bg-muted/30 items-center justify-center p-8 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5" />
+        <div className="relative z-10 max-w-2xl w-full">
+          <img 
+            src={loginHero} 
+            alt="AI and Data Analytics" 
+            className="w-full h-auto rounded-lg shadow-2xl"
+            data-testid="img-login-hero"
+          />
+          <div className="mt-8 text-center">
+            <h2 className="text-2xl font-semibold text-foreground">
+              Intelligent Data Access
+            </h2>
+            <p className="mt-2 text-muted-foreground max-w-md mx-auto">
+              Harness the power of AI-driven analytics with secure, role-based access to your enterprise data sources.
+            </p>
           </div>
+        </div>
+      </div>
 
-          <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-xl">Sign in</CardTitle>
-              <CardDescription>
-                Enter your credentials to access the platform
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+      <div className="w-full lg:w-[420px] xl:w-[480px] flex flex-col bg-background border-l">
+        <header className="flex items-center justify-end p-4">
+          <ThemeToggle />
+        </header>
+        
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm space-y-8">
+            <div className="flex flex-col items-center space-y-4">
+              <img src={bitechLogo} alt="Bitech" className="h-12 w-auto" data-testid="img-bitech-logo" />
+              <div className="text-center">
+                <h1 className="text-2xl font-bold tracking-tight">DC4AI</h1>
+                <p className="text-muted-foreground mt-1">
+                  Data Collection 4 Artificial Intelligence
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2 text-center">
+                <h2 className="text-xl font-semibold">Sign in</h2>
+                <p className="text-sm text-muted-foreground">
+                  Enter your credentials to access the platform
+                </p>
+              </div>
+
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
@@ -145,14 +166,14 @@ export default function LoginPage() {
                   </Button>
                 </form>
               </Form>
-            </CardContent>
-          </Card>
+            </div>
 
-          <p className="text-center text-xs text-muted-foreground">
-            Protected by AWS Cognito authentication
-          </p>
-        </div>
-      </main>
+            <p className="text-center text-xs text-muted-foreground">
+              Protected by AWS Cognito authentication
+            </p>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
