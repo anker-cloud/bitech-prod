@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LayoutDashboard, Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { loginSchema, type LoginCredentials } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
+import bitechLogo from "@/assets/bitech-logo.png";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -53,9 +54,7 @@ export default function LoginPage() {
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-8">
           <div className="flex flex-col items-center space-y-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary shadow-lg">
-              <LayoutDashboard className="h-8 w-8 text-primary-foreground" />
-            </div>
+            <img src={bitechLogo} alt="Bitech" className="h-12 w-auto" />
             <div className="text-center">
               <h1 className="text-2xl font-bold tracking-tight">Data Access Platform</h1>
               <p className="text-muted-foreground mt-1">

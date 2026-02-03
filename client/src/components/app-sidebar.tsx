@@ -1,4 +1,4 @@
-import { Database, Users, Shield, LogOut, LayoutDashboard } from "lucide-react";
+import { Database, Users, Shield, LogOut } from "lucide-react";
 import { useLocation, Link } from "wouter";
 import {
   Sidebar,
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth-context";
 import { Separator } from "@/components/ui/separator";
+import bitechLogo from "@/assets/bitech-logo.png";
 
 const mainNavItems = [
   {
@@ -55,13 +56,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
-            <LayoutDashboard className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold">Data Access</span>
-            <span className="text-xs text-muted-foreground">Platform</span>
-          </div>
+          <img src={bitechLogo} alt="Bitech" className="h-8 w-auto" />
         </div>
       </SidebarHeader>
 

@@ -1,8 +1,8 @@
-# Data Access Platform
+# Bitech Data Access Platform
 
 ## Overview
 
-This is an enterprise data access platform that provides role-based access control for querying AWS data sources. The application enables administrators to manage users and roles with granular permissions to different data sources (Crime, Events, Traffic, Weather), while regular users can query data through either a visual query builder or custom SQL interface. The system integrates with AWS services including Cognito for authentication, Athena for query execution, Glue for schema discovery, Lake Formation for permissions, and IAM for role management.
+This is the Bitech enterprise data access platform that provides role-based access control for querying AWS data sources. The application enables administrators to manage users and roles with granular permissions to different data sources (Crime, Events, Traffic, Weather), while regular users can query data through either a visual query builder or custom SQL interface. The system integrates with AWS services including Cognito for authentication, Athena for query execution, Glue for schema discovery, Lake Formation for permissions, and IAM for role management.
 
 ## User Preferences
 
