@@ -100,19 +100,20 @@ export default function LoginPage() {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <div className="relative">
+                          <div className="relative flex items-center">
                             <Input
                               type={showPassword ? "text" : "password"}
                               placeholder="Enter your password"
                               autoComplete="current-password"
                               data-testid="input-password"
+                              className="pr-10"
                               {...field}
                             />
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="absolute right-0 top-0 h-full px-3"
+                              className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-8"
                               onClick={() => setShowPassword(!showPassword)}
                               data-testid="button-toggle-password"
                             >
