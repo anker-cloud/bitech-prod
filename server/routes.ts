@@ -647,7 +647,8 @@ export async function registerRoutes(
       }
 
       const whereClause = filterClauses.length > 0 ? `WHERE ${filterClauses.join(" AND ")}` : "";
-      const sql = `SELECT ${columnList} FROM "${resolvedTableName}" ${whereClause} LIMIT ${limit} OFFSET ${offset}`;
+      // Note: Athena doesn't support OFFSET, so we only use LIMIT for now
+      const sql = `SELECT ${columnList} FROM "${resolvedTableName}" ${whereClause} LIMIT ${limit}`;
 
       const result = await executeQuery(sql, dataSource);
 
