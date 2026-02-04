@@ -46,7 +46,9 @@ const adminNavItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, canGenerateApiKeys } = useAuth();
+  
+  const hasApiKeyAccess = isAdmin || canGenerateApiKeys;
 
   const getInitials = (name: string) => {
     return name
@@ -72,7 +74,9 @@ export function AppSidebar() {
           <SidebarGroupLabel>Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {mainNavItems
+                .filter((item) => item.url !== "/api-keys" || hasApiKeyAccess)
+                .map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
