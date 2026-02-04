@@ -1,11 +1,12 @@
 import { 
-  users, roles, queryHistory,
+  users, roles, queryHistory, apiKeys,
   type User, type InsertUser,
   type Role, type InsertRole,
-  type QueryHistory, type InsertQueryHistory
+  type QueryHistory, type InsertQueryHistory,
+  type ApiKey, type InsertApiKey
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -26,6 +27,11 @@ export interface IStorage {
 
   createQueryHistory(query: InsertQueryHistory): Promise<QueryHistory>;
   getUserQueryHistory(userId: string): Promise<QueryHistory[]>;
+
+  createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
+  getApiKeysByUserId(userId: string): Promise<ApiKey[]>;
+  getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined>;
+  revokeApiKey(id: string, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -129,6 +135,28 @@ export class DatabaseStorage implements IStorage {
 
   async getUserQueryHistory(userId: string): Promise<QueryHistory[]> {
     return db.select().from(queryHistory).where(eq(queryHistory.userId, userId));
+  }
+
+  async createApiKey(insertApiKey: InsertApiKey): Promise<ApiKey> {
+    const [apiKey] = await db.insert(apiKeys).values(insertApiKey).returning();
+    return apiKey;
+  }
+
+  async getApiKeysByUserId(userId: string): Promise<ApiKey[]> {
+    return db.select().from(apiKeys).where(eq(apiKeys.userId, userId));
+  }
+
+  async getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined> {
+    const [apiKey] = await db.select().from(apiKeys).where(
+      and(eq(apiKeys.keyHash, keyHash), eq(apiKeys.isRevoked, false))
+    );
+    return apiKey || undefined;
+  }
+
+  async revokeApiKey(id: string, userId: string): Promise<void> {
+    await db.update(apiKeys)
+      .set({ isRevoked: true })
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)));
   }
 }
 

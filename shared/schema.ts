@@ -86,6 +86,23 @@ export const queryHistoryRelations = relations(queryHistory, ({ one }) => ({
   }),
 }));
 
+export const apiKeys = pgTable("api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull(),
+  keyPrefix: text("key_prefix").notNull(),
+  isRevoked: boolean("is_revoked").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+  user: one(users, {
+    fields: [apiKeys.userId],
+    references: [users.id],
+  }),
+}));
+
 export const insertRoleSchema = createInsertSchema(roles).omit({
   id: true,
   createdAt: true,
@@ -103,12 +120,19 @@ export const insertQueryHistorySchema = createInsertSchema(queryHistory).omit({
   createdAt: true,
 });
 
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type Role = typeof roles.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type QueryHistory = typeof queryHistory.$inferSelect;
 export type InsertQueryHistory = z.infer<typeof insertQueryHistorySchema>;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 
 export const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),

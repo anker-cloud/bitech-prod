@@ -7,8 +7,20 @@ import { grantLakeFormationPermissions, revokeLakeFormationPermissions, updateLa
 import { getDataSourceSchemas, getDataSourceColumns } from "./aws/glue";
 import { executeQuery } from "./aws/athena";
 import { authMiddleware, adminMiddleware, validateDataSourceAccess, getRowFilters, buildRowFilterWhereClause, type AuthenticatedRequest } from "./middleware/auth";
-import { insertRoleSchema, insertUserSchema, DATA_SOURCES, type DataSourcePermission } from "@shared/schema";
+import { insertRoleSchema, insertUserSchema, DATA_SOURCES, type DataSourcePermission, type Role } from "@shared/schema";
 import { z } from "zod";
+import crypto from "crypto";
+
+function generateApiKey(): { key: string; hash: string; prefix: string } {
+  const key = `dc4ai_${crypto.randomBytes(32).toString('hex')}`;
+  const hash = crypto.createHash('sha256').update(key).digest('hex');
+  const prefix = key.substring(0, 12);
+  return { key, hash, prefix };
+}
+
+function hashApiKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -443,6 +455,240 @@ export async function registerRoutes(
       res.json(result);
     } catch (error) {
       console.error("Query execution error:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Query execution failed" 
+      });
+    }
+  });
+
+  // API Key Management Routes
+  app.get("/api/api-keys", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const keys = await storage.getApiKeysByUserId(req.user!.id);
+      res.json(keys.map(k => ({
+        id: k.id,
+        name: k.name,
+        keyPrefix: k.keyPrefix,
+        isRevoked: k.isRevoked,
+        createdAt: k.createdAt,
+      })));
+    } catch (error) {
+      console.error("Get API keys error:", error);
+      res.status(500).json({ message: "Failed to fetch API keys" });
+    }
+  });
+
+  app.post("/api/api-keys", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { name } = req.body;
+
+      if (!name?.trim()) {
+        return res.status(400).json({ message: "API key name is required" });
+      }
+
+      const { key, hash, prefix } = generateApiKey();
+
+      const apiKey = await storage.createApiKey({
+        userId: req.user!.id,
+        name: name.trim(),
+        keyHash: hash,
+        keyPrefix: prefix,
+        isRevoked: false,
+      });
+
+      res.status(201).json({
+        id: apiKey.id,
+        name: apiKey.name,
+        key: key,
+        keyPrefix: prefix,
+        createdAt: apiKey.createdAt,
+        message: "Save this API key - it will not be shown again",
+      });
+    } catch (error) {
+      console.error("Create API key error:", error);
+      res.status(500).json({ message: "Failed to create API key" });
+    }
+  });
+
+  app.delete("/api/api-keys/:id", authMiddleware, async (req: AuthenticatedRequest<{ id: string }>, res: Response) => {
+    try {
+      await storage.revokeApiKey(req.params.id, req.user!.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Revoke API key error:", error);
+      res.status(500).json({ message: "Failed to revoke API key" });
+    }
+  });
+
+  // Public API Endpoint for data fetching
+  app.get("/api/v1/fetch", async (req: Request, res: Response) => {
+    try {
+      const apiKey = req.headers["x-api-key"] as string;
+      const dataSource = req.headers["x-data-source"] as string;
+      const tableName = req.headers["x-table"] as string | undefined;
+      const acceptHeader = req.headers["accept"] as string || "application/json";
+
+      if (!apiKey) {
+        return res.status(401).json({ message: "Missing x-api-key header" });
+      }
+
+      if (!dataSource) {
+        return res.status(400).json({ message: "Missing x-data-source header" });
+      }
+
+      const keyHash = hashApiKey(apiKey);
+      const storedKey = await storage.getApiKeyByHash(keyHash);
+
+      if (!storedKey) {
+        return res.status(401).json({ message: "Invalid or revoked API key" });
+      }
+
+      const user = await storage.getUser(storedKey.userId);
+      if (!user || !user.isActive) {
+        return res.status(401).json({ message: "User account is inactive" });
+      }
+
+      const role = user.roleId ? await storage.getRole(user.roleId) : null;
+      if (!role) {
+        return res.status(403).json({ message: "User has no assigned role" });
+      }
+
+      const dataSourceConfig = DATA_SOURCES.find(ds => ds.id === dataSource);
+      if (!dataSourceConfig) {
+        return res.status(400).json({ 
+          message: "Invalid data source",
+          validSources: DATA_SOURCES.map(ds => ds.id)
+        });
+      }
+
+      const permissions = role.permissions as DataSourcePermission[] || [];
+      const dataSourcePermission = permissions.find(p => p.dataSourceId === dataSource);
+      
+      if (!role.isAdmin && (!dataSourcePermission || !dataSourcePermission.hasAccess)) {
+        return res.status(403).json({ message: "Access denied to this data source" });
+      }
+
+      const resolvedTableName = tableName || dataSourceConfig.tableName;
+      const tablePermission = dataSourcePermission?.tables?.find(t => t.tableName === resolvedTableName);
+
+      // Parse query parameters
+      const columns = req.query.columns as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      // Build column list
+      let columnList = "*";
+      if (columns) {
+        const requestedColumns = columns.split(",").map(c => c.trim());
+        
+        // Check column permissions if not admin
+        if (!role.isAdmin && tablePermission && !tablePermission.allColumns) {
+          const allowedColumns = tablePermission.columns || [];
+          const invalidColumns = requestedColumns.filter(c => !allowedColumns.includes(c));
+          if (invalidColumns.length > 0) {
+            return res.status(403).json({ 
+              message: `Access denied to columns: ${invalidColumns.join(", ")}`,
+              allowedColumns 
+            });
+          }
+        }
+        
+        columnList = requestedColumns.map(c => `"${c.replace(/"/g, '""')}"`).join(", ");
+      } else if (!role.isAdmin && tablePermission && !tablePermission.allColumns) {
+        const allowedColumns = tablePermission.columns || [];
+        if (allowedColumns.length > 0) {
+          columnList = allowedColumns.map(c => `"${c.replace(/"/g, '""')}"`).join(", ");
+        }
+      }
+
+      // Build filters from query params (equals only)
+      const filterParams = Object.entries(req.query)
+        .filter(([key]) => !["columns", "limit", "offset"].includes(key));
+      
+      const filterClauses: string[] = [];
+      for (const [column, value] of filterParams) {
+        const safeColumn = column.replace(/"/g, '""');
+        const safeValue = String(value).replace(/'/g, "''");
+        filterClauses.push(`"${safeColumn}" = '${safeValue}'`);
+      }
+
+      // Apply row-level permissions
+      if (!role.isAdmin && tablePermission && !tablePermission.allRows && tablePermission.rowFilters) {
+        for (const filter of tablePermission.rowFilters) {
+          const safeCol = filter.column.replace(/"/g, '""');
+          const safeVal = String(filter.value).replace(/'/g, "''");
+          
+          let clause: string;
+          switch (filter.operator) {
+            case "equals":
+              clause = `"${safeCol}" = '${safeVal}'`;
+              break;
+            case "not_equals":
+              clause = `"${safeCol}" != '${safeVal}'`;
+              break;
+            case "contains":
+              clause = `"${safeCol}" LIKE '%${safeVal}%'`;
+              break;
+            case "greater_than":
+              clause = `"${safeCol}" > '${safeVal}'`;
+              break;
+            case "less_than":
+              clause = `"${safeCol}" < '${safeVal}'`;
+              break;
+            case "in":
+              const values = safeVal.split(",").map(v => `'${v.trim()}'`).join(", ");
+              clause = `"${safeCol}" IN (${values})`;
+              break;
+            default:
+              clause = `"${safeCol}" = '${safeVal}'`;
+          }
+          filterClauses.push(clause);
+        }
+      }
+
+      const whereClause = filterClauses.length > 0 ? `WHERE ${filterClauses.join(" AND ")}` : "";
+      const sql = `SELECT ${columnList} FROM "${resolvedTableName}" ${whereClause} LIMIT ${limit} OFFSET ${offset}`;
+
+      const result = await executeQuery(sql, dataSource);
+
+      // Return CSV if requested
+      if (acceptHeader.includes("text/csv")) {
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", "attachment; filename=data.csv");
+        
+        if (result.rows.length === 0) {
+          return res.send("");
+        }
+
+        const header = result.columns.join(",");
+        const rows = result.rows.map(row => 
+          result.columns.map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) return "";
+            const str = String(val);
+            if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          }).join(",")
+        );
+        
+        return res.send([header, ...rows].join("\n"));
+      }
+
+      // Default JSON response
+      res.json({
+        data: result.rows,
+        meta: {
+          columns: result.columns,
+          totalRows: result.totalRows,
+          limit,
+          offset,
+          executionTimeMs: result.executionTimeMs,
+        }
+      });
+    } catch (error) {
+      console.error("API fetch error:", error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Query execution failed" 
       });
