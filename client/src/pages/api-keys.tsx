@@ -219,41 +219,6 @@ export default function ApiKeysPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">API Usage</CardTitle>
-            <CardDescription>
-              Use your API key to fetch data programmatically
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-muted rounded-lg p-4 font-mono text-sm overflow-x-auto">
-              <div className="text-muted-foreground mb-2"># Example curl request</div>
-              <div className="whitespace-pre-wrap break-all">
-{`curl -X GET "https://your-domain/api/v1/fetch?columns=city_name,date_time&limit=10" \\
-  -H "x-api-key: your-api-key" \\
-  -H "x-data-source: crime-data-db" \\
-  -H "Accept: application/json"`}
-              </div>
-            </div>
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p><strong>Headers:</strong></p>
-              <ul className="list-disc list-inside ml-4 space-y-1">
-                <li><code className="bg-muted px-1 rounded">x-api-key</code> - Your API key (required)</li>
-                <li><code className="bg-muted px-1 rounded">x-data-source</code> - Database name (required). Available: crime-data-db, events-data-db, insurance-data-db, traffic-data-db, weather-data-db</li>
-                <li><code className="bg-muted px-1 rounded">Accept</code> - Response format: <code>application/json</code> (default) or <code>text/csv</code></li>
-              </ul>
-              <p className="mt-2"><strong>Query Parameters:</strong></p>
-              <ul className="list-disc list-inside ml-4 space-y-1">
-                <li><code className="bg-muted px-1 rounded">columns</code> - Comma-separated column names (optional, returns all allowed columns if omitted)</li>
-                <li><code className="bg-muted px-1 rounded">limit</code> - Max rows to return (default: 100, max: 1000)</li>
-                <li>Any other parameter is treated as an equals filter (e.g., <code>city_name=Berlin</code>)</li>
-              </ul>
-              <p className="mt-2 text-xs">Note: Your API key inherits the permissions of your user role. Column and row-level restrictions apply.</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle className="text-lg">Your API Keys</CardTitle>
             <CardDescription>
               {activeKeys.length} active key{activeKeys.length !== 1 ? "s" : ""}
