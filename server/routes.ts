@@ -113,7 +113,7 @@ export async function registerRoutes(
         });
       }
 
-      const { name, description, isAdmin, permissions } = req.body;
+      const { name, description, isAdmin, canGenerateApiKeys, permissions } = req.body;
 
       if (!name?.trim()) {
         return res.status(400).json({ message: "Role name is required" });
@@ -139,6 +139,7 @@ export async function registerRoutes(
         name: name.trim(),
         description: description?.trim() || null,
         isAdmin: isAdmin || false,
+        canGenerateApiKeys: canGenerateApiKeys || false,
         permissions: permissions || [],
         iamRoleArn,
       });
@@ -152,7 +153,7 @@ export async function registerRoutes(
 
   app.patch("/api/roles/:id", authMiddleware, adminMiddleware, async (req: AuthenticatedRequest<{ id: string }>, res: Response) => {
     try {
-      const { name, description, isAdmin, permissions } = req.body;
+      const { name, description, isAdmin, canGenerateApiKeys, permissions } = req.body;
       const role = await storage.getRole(req.params.id);
 
       if (!role) {
@@ -183,6 +184,7 @@ export async function registerRoutes(
         name: name?.trim() || role.name,
         description: description?.trim() ?? role.description,
         isAdmin: isAdmin ?? role.isAdmin,
+        canGenerateApiKeys: canGenerateApiKeys ?? role.canGenerateApiKeys,
         permissions: permissions ?? role.permissions,
       });
 
