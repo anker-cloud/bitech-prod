@@ -46,6 +46,7 @@ export default function RoleFormPage() {
       tables: [],
     }))
   );
+  const [expandedDataSources, setExpandedDataSources] = useState<string[]>([]);
 
   const { data: existingRole, isLoading: isLoadingRole } = useQuery<Role>({
     queryKey: ["/api/roles", id],
@@ -63,12 +64,17 @@ export default function RoleFormPage() {
       setIsAdmin(existingRole.isAdmin);
       setCanGenerateApiKeys(existingRole.canGenerateApiKeys || false);
       if (existingRole.permissions) {
-        setPermissions(
-          DATA_SOURCES.map((ds) => {
-            const existing = existingRole.permissions?.find((p) => p.dataSourceId === ds.id);
-            return existing || { dataSourceId: ds.id, hasAccess: false, tables: [] };
-          })
-        );
+        const updatedPermissions = DATA_SOURCES.map((ds) => {
+          const existing = existingRole.permissions?.find((p) => p.dataSourceId === ds.id);
+          return existing || { dataSourceId: ds.id, hasAccess: false, tables: [] };
+        });
+        setPermissions(updatedPermissions);
+        
+        // Auto-expand data sources that have access enabled
+        const enabledDataSources = updatedPermissions
+          .filter((p) => p.hasAccess)
+          .map((p) => p.dataSourceId);
+        setExpandedDataSources(enabledDataSources);
       }
     }
   }, [existingRole]);
@@ -106,6 +112,13 @@ export default function RoleFormPage() {
           : p
       )
     );
+    
+    // Auto-expand the accordion when data source is enabled
+    if (hasAccess) {
+      setExpandedDataSources((prev) => 
+        prev.includes(dataSourceId) ? prev : [...prev, dataSourceId]
+      );
+    }
   };
 
   const handleTableToggle = (dataSourceId: string, tableName: string, hasAccess: boolean, allColumns: { name: string }[]) => {
@@ -329,7 +342,7 @@ export default function RoleFormPage() {
                   ))}
                 </div>
               ) : (
-                <Accordion type="multiple" className="space-y-2">
+                <Accordion type="multiple" value={expandedDataSources} onValueChange={setExpandedDataSources} className="space-y-2">
                   {DATA_SOURCES.map((ds) => {
                     const permission = permissions.find((p) => p.dataSourceId === ds.id);
                     const schema = schemas?.find((s) => s.dataSourceId === ds.id);
