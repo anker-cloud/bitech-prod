@@ -17,6 +17,7 @@
     "@aws-sdk/client-iam": "^3.981.0",
     "@aws-sdk/client-lakeformation": "^3.981.0",
     "@aws-sdk/client-s3": "^3.981.0",
+    "@aws-sdk/client-sts": "^3.983.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
