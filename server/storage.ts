@@ -32,6 +32,8 @@ export interface IStorage {
   getApiKeysByUserId(userId: string): Promise<ApiKey[]>;
   getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined>;
   revokeApiKey(id: string, userId: string): Promise<void>;
+  deleteApiKey(id: string, userId: string): Promise<void>;
+  deleteApiKeysByUserId(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -154,9 +156,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async revokeApiKey(id: string, userId: string): Promise<void> {
-    await db.update(apiKeys)
+    const result = await db.update(apiKeys)
       .set({ isRevoked: true })
-      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)));
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)))
+      .returning();
+    
+    if (result.length === 0) {
+      throw new Error("API key not found or does not belong to this user");
+    }
+  }
+
+  async deleteApiKey(id: string, userId: string): Promise<void> {
+    const result = await db.delete(apiKeys)
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)))
+      .returning();
+    
+    if (result.length === 0) {
+      throw new Error("API key not found or does not belong to this user");
+    }
+  }
+
+  async deleteApiKeysByUserId(userId: string): Promise<void> {
+    await db.delete(apiKeys).where(eq(apiKeys.userId, userId));
   }
 }
 
