@@ -36,17 +36,18 @@ export async function authMiddleware(
 
     const token = authHeader.substring(7);
 
-    let email: string;
+    let cognitoUserId: string;
 
     try {
       const payload = await getVerifier().verify(token);
-      email = payload.username as string;
+      // The 'sub' claim contains the Cognito user ID
+      cognitoUserId = (payload.sub || payload.username) as string;
     } catch (verifyError) {
       console.error("Token verification failed:", verifyError);
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
-    const user = await storage.getUserByEmail(email);
+    const user = await storage.getUserByCognitoId(cognitoUserId);
     
     if (!user) {
       return res.status(401).json({ message: "User not found" });
