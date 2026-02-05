@@ -19,16 +19,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("auth_user");
-    if (storedUser) {
+    const validateSession = async () => {
+      const storedUser = localStorage.getItem("auth_user");
+      if (!storedUser) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
+        
+        // Validate token with backend
+        const response = await fetch("/api/auth/me", {
+          headers: {
+            Authorization: `Bearer ${parsedUser.accessToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const validatedUser = await response.json();
+          setUser({ ...validatedUser, accessToken: parsedUser.accessToken });
+          localStorage.setItem("auth_user", JSON.stringify({ ...validatedUser, accessToken: parsedUser.accessToken }));
+        } else {
+          // Token invalid or user deleted - clear local storage
+          localStorage.removeItem("auth_user");
+          setUser(null);
+        }
       } catch {
         localStorage.removeItem("auth_user");
+        setUser(null);
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+
+    validateSession();
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

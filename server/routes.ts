@@ -67,6 +67,38 @@ export async function registerRoutes(
     }
   });
 
+  // Validate token and return current user info
+  app.get("/api/auth/me", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      if (!user.isActive) {
+        return res.status(401).json({ message: "Account is inactive" });
+      }
+
+      const role = user.roleId ? await storage.getRole(user.roleId) : null;
+
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role,
+        isAdmin: role?.isAdmin || false,
+      });
+    } catch (error) {
+      console.error("Get current user error:", error);
+      res.status(401).json({ message: "Session validation failed" });
+    }
+  });
+
   // Public endpoint to check if setup is needed
   app.get("/api/setup/status", async (req: Request, res: Response) => {
     try {
