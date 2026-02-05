@@ -360,6 +360,16 @@ export async function registerRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
+      const userApiKeys = await storage.getApiKeysByUserId(req.params.id);
+      const activeApiKeys = userApiKeys.filter(key => !key.isRevoked);
+      
+      if (activeApiKeys.length > 0) {
+        return res.status(400).json({ 
+          message: `This user has ${activeApiKeys.length} active API key(s). Please delete or revoke all API keys before deleting the user.`,
+          apiKeyCount: activeApiKeys.length
+        });
+      }
+
       try {
         await deleteCognitoUser(user.email);
       } catch (cognitoError) {
