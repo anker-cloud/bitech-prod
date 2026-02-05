@@ -44,5 +44,5 @@ integrations = ["javascript_database:1.0.0"]
 [userenv]
 
 [userenv.shared]
-DEMO_MODE = "true"
+DEMO_MODE = "false"
 ATHENA_OUTPUT_LOCATION = "s3://bitech-pbac-data-prd/athena-post-op/"
