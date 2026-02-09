@@ -547,7 +547,7 @@ export async function registerRoutes(
       const dataSourceId = req.params.id;
       
       if (!validateDataSourceAccess(req, dataSourceId)) {
-        return res.status(403).json({ message: "Access denied to this data source" });
+        return res.status(403).json({ message: "Access Denied!! You do not have Lake Formation permissions to access this data source." });
       }
 
       const columns = await getDataSourceColumns(dataSourceId);
@@ -573,7 +573,7 @@ export async function registerRoutes(
 
       if (!validateDataSourceAccess(req, dataSourceId)) {
         return res.status(403).json({ 
-          message: "Access denied: You do not have permission to query this data source" 
+          message: "Access Denied!! You do not have Lake Formation permissions to access this data source." 
         });
       }
 
@@ -726,7 +726,7 @@ export async function registerRoutes(
       const dataSourcePermission = permissions.find(p => p.dataSourceId === dataSource);
       
       if (!role.isAdmin && (!dataSourcePermission || !dataSourcePermission.hasAccess)) {
-        return res.status(403).json({ message: "Access denied to this data source" });
+        return res.status(403).json({ message: "Access Denied!! You do not have Lake Formation permissions to access this data source." });
       }
 
       const resolvedTableName = tableName || dataSourceConfig.tableName;
@@ -748,7 +748,7 @@ export async function registerRoutes(
           const invalidColumns = requestedColumns.filter(c => !allowedColumns.includes(c));
           if (invalidColumns.length > 0) {
             return res.status(403).json({ 
-              message: `Access denied to columns: ${invalidColumns.join(", ")}`,
+              message: `Access Denied!! You do not have Lake Formation permissions to access the following columns: ${invalidColumns.join(", ")}`,
               allowedColumns 
             });
           }
