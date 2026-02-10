@@ -1,0 +1,140 @@
+2026-02-10 11:03:46.06
+5d09bf87
+User
+}
+2026-02-10 11:03:46.06
+5d09bf87
+User
+detail: 'Key (id)=(1b335b8e-d04c-4aae-932c-8819492616d5) is still referenced from table "api_keys".',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at async /home/runner/workspace/dist/index.cjs:74:125640 {
+2026-02-10 11:03:46.06
+5d09bf87
+User
+5:33:46 AM [express] DELETE /api/users/1b335b8e-d04c-4aae-932c-8819492616d5 500 in 999ms :: {"message":"Failed to delete user"}
+2026-02-10 11:03:46.06
+5d09bf87
+User
+Delete user error: error: update or delete on table "users" violates foreign key constraint "api_keys_user_id_users_id_fk" on table "api_keys"
+2026-02-10 11:03:46.06
+5d09bf87
+User
+line: '2621',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+hint: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+Delete user error: error: update or delete on table "users" violates foreign key constraint "api_keys_user_id_users_id_fk" on table "api_keys"
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 11:03:46.06
+5d09bf87
+User
+file: 'ri_triggers.c',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+detail: 'Key (id)=(1b335b8e-d04c-4aae-932c-8819492616d5) is still referenced from table "api_keys".',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+severity: 'ERROR',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+table: 'api_keys',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+where: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at async Qd.deleteUser (/home/runner/workspace/dist/index.cjs:74:103215)
+2026-02-10 11:03:46.06
+5d09bf87
+User
+code: '23503',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+internalQuery: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+routine: 'ri_ReportViolation'
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 11:03:46.06
+5d09bf87
+User
+position: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+hint: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+dataType: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+constraint: 'api_keys_user_id_users_id_fk',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at /home/runner/workspace/dist/index.cjs:68:13326
+2026-02-10 11:03:46.06
+5d09bf87
+User
+column: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-02-10 11:03:46.06
+5d09bf87
+User
+internalPosition: undefined,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+Delete user error: error: update or delete on table "users" violates foreign key constraint "api_keys_user_id_users_id_fk" on table "api_keys"
+2026-02-10 11:03:46.06
+5d09bf87
+User
+}
+2026-02-10 11:03:46.06
+5d09bf87
+User
+line: '2621',
+2026-02-10 11:03:46.06
+5d09bf87
+User
+at async /home/runner/workspace/dist/index.cjs:74:125640 {
+2026-02-10 11:03:46.06
+5d09bf87
+User
+5:33:46 AM [express] DELETE /api/users/1b335b8e-d04c-4aae-932c-8819492616d5 500 in 999ms :: {"message":"Failed to delete user"}
+2026-02-10 11:03:46.06
+5d09bf87
+User
+Delete user error: error: update or delete on table "users" violates foreign key constraint "api_keys_user_id_users_id_fk" on table "api_keys"
+2026-02-10 11:03:46.06
+5d09bf87
+User
+length: 325,
+2026-02-10 11:03:46.06
+5d09bf87
+User
+schema: 'public',

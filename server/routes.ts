@@ -518,6 +518,8 @@ export async function registerRoutes(
         });
       }
 
+      await storage.deleteApiKeysByUserId(req.params.id);
+
       try {
         await deleteCognitoUser(user.email);
       } catch (cognitoError) {
