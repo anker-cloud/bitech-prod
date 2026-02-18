@@ -9,7 +9,7 @@ const GERMAN_CHAR_REPLACEMENTS: [string, string][] = [
 ];
 
 export function normalizeGermanExpr(expr: string): string {
-  let result = expr;
+  let result = `CAST(${expr} AS VARCHAR)`;
   for (const [from, to] of GERMAN_CHAR_REPLACEMENTS) {
     result = `REPLACE(${result}, '${from}', '${to}')`;
   }
