@@ -546,9 +546,8 @@ export async function registerRoutes(
   });
 
   app.get("/api/data-sources/:id/columns", authMiddleware, async (req: AuthenticatedRequest<{ id: string }>, res: Response) => {
+    const dataSourceId = req.params.id;
     try {
-      const dataSourceId = req.params.id;
-      
       if (!validateDataSourceAccess(req, dataSourceId)) {
         return res.status(403).json({ message: "Access Denied!! You do not have Lake Formation permissions to access this data source." });
       }
