@@ -63,14 +63,27 @@ export default function DataViewerPage() {
         const res = await fetch(`/api/data-sources/${dsId}/columns`, {
           headers: { Authorization: `Bearer ${user?.accessToken}` },
         });
-        if (!res.ok) throw new Error("Failed to fetch columns");
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: "Unknown error" }));
+          throw new Error(err.message || "Failed to fetch columns");
+        }
         return res.json() as Promise<TableColumn[]>;
       },
       enabled: !!dsId,
+      retry: 1,
     })),
   });
 
   const isLoadingColumns = columnQueries.some((q) => q.isLoading);
+  const hasColumnError = columnQueries.some((q) => q.isError);
+
+  const erroredSources = useMemo(() => {
+    const errored: string[] = [];
+    selectedDataSources.forEach((dsId, i) => {
+      if (columnQueries[i]?.isError) errored.push(dsId);
+    });
+    return errored;
+  }, [selectedDataSources, columnQueries]);
 
   const columnQueryData = columnQueries.map(q => q.data);
   const allColumnsPerSource = useMemo(() => {
@@ -92,8 +105,9 @@ export default function DataViewerPage() {
 
   const joinColumns = useMemo(() => {
     if (!isMultiTable) return [];
-    const sources = selectedDataSources;
-    const columnSets = sources.map((dsId) => {
+    const loadedSources = selectedDataSources.filter((dsId) => !erroredSources.includes(dsId));
+    if (loadedSources.length < 2) return [];
+    const columnSets = loadedSources.map((dsId) => {
       const cols = allColumnsPerSource[dsId] || [];
       return new Set(cols.map((c) => c.name));
     });
@@ -101,7 +115,7 @@ export default function DataViewerPage() {
     return [...columnSets[0]].filter((name) =>
       columnSets.every((set) => set.has(name))
     );
-  }, [isMultiTable, selectedDataSources, allColumnsPerSource]);
+  }, [isMultiTable, selectedDataSources, allColumnsPerSource, erroredSources]);
 
   const columnSourceMap = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -535,6 +549,17 @@ export default function DataViewerPage() {
                             <Skeleton key={i} className="h-6 w-full" />
                           ))}
                         </div>
+                      ) : hasColumnError ? (
+                        <div className="text-xs text-center py-2 space-y-1" data-testid="text-column-error">
+                          <p className="text-destructive font-medium">Failed to load columns for:</p>
+                          {erroredSources.map((dsId) => {
+                            const ds = DATA_SOURCES.find((d) => d.id === dsId);
+                            return (
+                              <p key={dsId} className="text-destructive">{ds?.name || dsId}</p>
+                            );
+                          })}
+                          <p className="text-muted-foreground mt-1">This may be a temporary issue. Try deselecting and reselecting the source.</p>
+                        </div>
                       ) : isMultiTable && joinColumns.length === 0 ? (
                         <p className="text-xs text-muted-foreground text-center py-2" data-testid="text-no-join-columns">
                           No common columns found between the selected tables. Tables must share at least one column name to join.
@@ -701,7 +726,7 @@ export default function DataViewerPage() {
             <Button
               className="w-full"
               onClick={handleRunQuery}
-              disabled={queryMutation.isPending || (!generatedSql && queryMode === "builder") || (!customSql && queryMode === "custom") || selectedDataSources.length === 0}
+              disabled={queryMutation.isPending || (!generatedSql && queryMode === "builder") || (!customSql && queryMode === "custom") || selectedDataSources.length === 0 || hasColumnError}
               data-testid="button-run-query"
             >
               {queryMutation.isPending ? (

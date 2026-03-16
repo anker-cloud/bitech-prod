@@ -85,12 +85,20 @@ export async function getTableColumns(databaseName: string, tableName: string): 
 }
 
 export async function getDataSourceColumns(dataSourceId: string): Promise<TableColumn[]> {
-  const schemas = await getDataSourceSchemas();
-  const schema = schemas.find(s => s.dataSourceId === dataSourceId);
-
-  if (!schema || schema.tables.length === 0) {
-    return [];
+  const dataSource = DATA_SOURCES.find(ds => ds.id === dataSourceId);
+  if (!dataSource) {
+    throw new Error(`Unknown data source: ${dataSourceId}`);
   }
 
-  return schema.tables[0].columns;
+  const activeDb = getActiveDatabase();
+  const command = new GetTableCommand({
+    DatabaseName: activeDb,
+    Name: dataSource.tableName,
+  });
+
+  const response = await client.send(command);
+  return (response.Table?.StorageDescriptor?.Columns || []).map(col => ({
+    name: col.Name || "",
+    type: col.Type || "string",
+  }));
 }
