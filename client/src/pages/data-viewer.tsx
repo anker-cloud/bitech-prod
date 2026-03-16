@@ -566,7 +566,7 @@ export default function DataViewerPage() {
                           </div>
                         )}
                         <ScrollArea className="h-48 rounded-md border p-2">
-                          <div className="space-y-2">
+                          <div className="min-w-max space-y-2">
                             {accessibleColumns.map((column) => {
                               const isCommon = isMultiTable && joinColumns.includes(column.name);
                               const ownerIds = isMultiTable ? (columnSourceMap[column.name] || []) : [];
@@ -574,14 +574,14 @@ export default function DataViewerPage() {
                                 ? ownerIds.map((id) => DATA_SOURCES.find((d) => d.id === id)?.shortName || id).join(", ")
                                 : null;
                               return (
-                                <div key={column.name} className="flex items-center gap-2">
+                                <div key={column.name} className="flex items-center gap-2 whitespace-nowrap">
                                   <Checkbox
                                     id={column.name}
                                     checked={selectedColumns.includes(column.name)}
                                     onCheckedChange={(checked) => handleColumnToggle(column.name, checked as boolean)}
                                     data-testid={`checkbox-column-${column.name}`}
                                   />
-                                  <label htmlFor={column.name} className="text-sm flex-1 cursor-pointer truncate">
+                                  <label htmlFor={column.name} className="text-sm cursor-pointer">
                                     {column.name}
                                   </label>
                                   {isMultiTable && (
@@ -596,6 +596,7 @@ export default function DataViewerPage() {
                               );
                             })}
                           </div>
+                          <ScrollBar orientation="horizontal" />
                         </ScrollArea>
                         </>
                       )}
