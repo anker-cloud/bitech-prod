@@ -215,9 +215,6 @@ export default function DataViewerPage() {
     });
     const sources = sortedSources.map((s, i) => ({ ...s, alias: `t${i + 1}` }));
 
-    const sourceAliasMap: Record<string, string> = {};
-    sources.forEach((s) => { sourceAliasMap[s.dsId] = s.alias; });
-
     const colAlias = (colName: string): string => {
       if (joinColumns.includes(colName)) return sources[0].alias;
       const ownerSources = columnSourceMap[colName] || [];
