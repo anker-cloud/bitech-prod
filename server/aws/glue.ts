@@ -1,10 +1,10 @@
 import {
   GlueClient,
-  GetDatabasesCommand,
   GetTablesCommand,
   GetTableCommand,
 } from "@aws-sdk/client-glue";
 import { DATA_SOURCES } from "@shared/schema";
+import { getActiveDatabase } from "./config";
 
 const client = new GlueClient({
   region: process.env.AWS_REGION || "us-east-1",
@@ -31,34 +31,27 @@ export interface DataSourceSchema {
 
 export async function getDataSourceSchemas(): Promise<DataSourceSchema[]> {
   const schemas: DataSourceSchema[] = [];
+  const activeDb = getActiveDatabase();
 
   for (const dataSource of DATA_SOURCES) {
     try {
-      const tablesCommand = new GetTablesCommand({
-        DatabaseName: dataSource.id,
+      const command = new GetTableCommand({
+        DatabaseName: activeDb,
+        Name: dataSource.tableName,
       });
 
-      const tablesResponse = await client.send(tablesCommand);
-      const tables: TableInfo[] = [];
-
-      for (const table of tablesResponse.TableList || []) {
-        const columns: TableColumn[] = (table.StorageDescriptor?.Columns || []).map(col => ({
-          name: col.Name || "",
-          type: col.Type || "string",
-        }));
-
-        tables.push({
-          name: table.Name || "",
-          columns,
-        });
-      }
+      const response = await client.send(command);
+      const columns: TableColumn[] = (response.Table?.StorageDescriptor?.Columns || []).map(col => ({
+        name: col.Name || "",
+        type: col.Type || "string",
+      }));
 
       schemas.push({
         dataSourceId: dataSource.id,
-        tables,
+        tables: [{ name: dataSource.tableName, columns }],
       });
     } catch (error) {
-      console.error(`Error fetching schema for ${dataSource.id}:`, error);
+      console.error(`Error fetching schema for ${dataSource.id} (${dataSource.tableName}) from ${activeDb}:`, error);
       schemas.push({
         dataSourceId: dataSource.id,
         tables: [],
@@ -77,7 +70,7 @@ export async function getTableColumns(databaseName: string, tableName: string): 
     });
 
     const response = await client.send(command);
-    
+
     return (response.Table?.StorageDescriptor?.Columns || []).map(col => ({
       name: col.Name || "",
       type: col.Type || "string",
@@ -94,7 +87,7 @@ export async function getTableColumns(databaseName: string, tableName: string): 
 export async function getDataSourceColumns(dataSourceId: string): Promise<TableColumn[]> {
   const schemas = await getDataSourceSchemas();
   const schema = schemas.find(s => s.dataSourceId === dataSourceId);
-  
+
   if (!schema || schema.tables.length === 0) {
     return [];
   }

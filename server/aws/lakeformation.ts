@@ -8,6 +8,7 @@ import {
   Permission,
 } from "@aws-sdk/client-lakeformation";
 import type { DataSourcePermission } from "@shared/schema";
+import { getActiveDatabase } from "./config";
 
 const client = new LakeFormationClient({
   region: process.env.AWS_REGION || "us-east-1",
@@ -22,6 +23,7 @@ export async function grantLakeFormationPermissions(
   permissions: DataSourcePermission[]
 ): Promise<void> {
   const entries = [];
+  const activeDb = getActiveDatabase();
 
   for (const permission of permissions) {
     if (!permission.hasAccess) continue;
@@ -35,7 +37,7 @@ export async function grantLakeFormationPermissions(
           },
           Resource: {
             Table: {
-              DatabaseName: permission.dataSourceId,
+              DatabaseName: activeDb,
               Name: table.tableName,
             },
           },
@@ -49,7 +51,7 @@ export async function grantLakeFormationPermissions(
           },
           Resource: {
             TableWithColumns: {
-              DatabaseName: permission.dataSourceId,
+              DatabaseName: activeDb,
               Name: table.tableName,
               ColumnNames: table.columns,
             },
@@ -75,6 +77,7 @@ export async function revokeLakeFormationPermissions(
   permissions: DataSourcePermission[]
 ): Promise<void> {
   const entries = [];
+  const activeDb = getActiveDatabase();
 
   for (const permission of permissions) {
     for (const table of permission.tables) {
@@ -85,7 +88,7 @@ export async function revokeLakeFormationPermissions(
         },
         Resource: {
           Table: {
-            DatabaseName: permission.dataSourceId,
+            DatabaseName: activeDb,
             Name: table.tableName,
           },
         },

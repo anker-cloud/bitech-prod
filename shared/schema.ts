@@ -4,14 +4,22 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const DATA_SOURCES = [
-  { id: "crime-data-db", name: "Crime Data", description: "Crime statistics and incident data", tableName: "crime_data_prd_silver" },
-  { id: "events-data-db", name: "Events Data", description: "Event scheduling and tracking data", tableName: "event_data_prd_silver" },
-  { id: "insurance-data-db", name: "Insurance Data", description: "Policy and claims data for insurance analytics", tableName: "policy_claims_data_silver" },
-  { id: "traffic-data-db", name: "Traffic Data", description: "Traffic flow and incident data", tableName: "traffic_data_prd_silver" },
-  { id: "weather-data-db", name: "Weather Data", description: "Weather conditions and forecasts", tableName: "weather_data_prd_silver" },
+  { id: "crime-data-db", name: "Crime Data", description: "Crime statistics and incident data", tableName: "crime_data_silver", shortName: "crime" },
+  { id: "events-data-db", name: "Events Data", description: "Event scheduling and tracking data", tableName: "events_data_silver", shortName: "events" },
+  { id: "insurance-data-db", name: "Insurance Data", description: "Policy and claims data for insurance analytics", tableName: "policy_claims_data_silver", shortName: "insurance" },
+  { id: "traffic-data-db", name: "Traffic Data", description: "Traffic flow and incident data", tableName: "traffic_data_silver", shortName: "traffic" },
+  { id: "weather-data-db", name: "Weather Data", description: "Weather conditions and forecasts", tableName: "weather_data_silver", shortName: "weather" },
 ] as const;
 
 export type DataSourceId = typeof DATA_SOURCES[number]["id"];
+
+export const DATA_SOURCE_SHORT_NAMES: Record<string, DataSourceId> = {
+  crime: "crime-data-db",
+  events: "events-data-db",
+  insurance: "insurance-data-db",
+  traffic: "traffic-data-db",
+  weather: "weather-data-db",
+};
 
 export interface RowFilterCondition {
   column: string;

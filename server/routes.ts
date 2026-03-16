@@ -7,7 +7,8 @@ import { grantLakeFormationPermissions, revokeLakeFormationPermissions, updateLa
 import { getDataSourceSchemas, getDataSourceColumns } from "./aws/glue";
 import { executeQuery } from "./aws/athena";
 import { authMiddleware, adminMiddleware, validateDataSourceAccess, getRowFilters, buildRowFilterWhereClause, type AuthenticatedRequest } from "./middleware/auth";
-import { insertRoleSchema, insertUserSchema, DATA_SOURCES, type DataSourcePermission, type Role } from "@shared/schema";
+import { insertRoleSchema, insertUserSchema, DATA_SOURCES, DATA_SOURCE_SHORT_NAMES, type DataSourcePermission, type Role } from "@shared/schema";
+import { getActiveDatabase } from "./aws/config";
 import { z } from "zod";
 import crypto from "crypto";
 import { normalizeGermanExpr, normalizeGermanValue } from "@shared/sql-normalize";
@@ -613,7 +614,7 @@ export async function registerRoutes(
         }
       }
 
-      const result = await executeQuery(modifiedSql, dataSourceId);
+      const result = await executeQuery(modifiedSql, getActiveDatabase());
       res.json(result);
     } catch (error) {
       console.error("Query execution error:", error);
@@ -716,22 +717,24 @@ export async function registerRoutes(
         return res.status(403).json({ message: "User has no assigned role" });
       }
 
-      const dataSourceConfig = DATA_SOURCES.find(ds => ds.id === dataSource);
+      const resolvedDataSourceId = DATA_SOURCE_SHORT_NAMES[dataSource] || dataSource;
+      const dataSourceConfig = DATA_SOURCES.find(ds => ds.id === resolvedDataSourceId);
       if (!dataSourceConfig) {
         return res.status(400).json({ 
           message: "Invalid data source",
-          validSources: DATA_SOURCES.map(ds => ds.id)
+          validSources: [...DATA_SOURCES.map(ds => ds.shortName), ...DATA_SOURCES.map(ds => ds.id)]
         });
       }
 
       const permissions = role.permissions as DataSourcePermission[] || [];
-      const dataSourcePermission = permissions.find(p => p.dataSourceId === dataSource);
+      const dataSourcePermission = permissions.find(p => p.dataSourceId === resolvedDataSourceId);
       
       if (!role.isAdmin && (!dataSourcePermission || !dataSourcePermission.hasAccess)) {
         return res.status(403).json({ message: "Access Denied!! You do not have Lake Formation permissions to access this data source." });
       }
 
       const resolvedTableName = tableName || dataSourceConfig.tableName;
+      const activeDatabase = getActiveDatabase();
       const tablePermission = dataSourcePermission?.tables?.find(t => t.tableName === resolvedTableName);
 
       // Parse query parameters
@@ -818,7 +821,7 @@ export async function registerRoutes(
       // Note: Athena doesn't support OFFSET, so we only use LIMIT for now
       const sql = `SELECT ${columnList} FROM "${resolvedTableName}" ${whereClause} LIMIT ${limit}`;
 
-      const result = await executeQuery(sql, dataSource);
+      const result = await executeQuery(sql, activeDatabase);
 
       // Return CSV if requested
       if (acceptHeader.includes("text/csv")) {

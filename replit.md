@@ -86,12 +86,18 @@ The Cognito User Pool client must have:
 - App client configured for server-side authentication
 
 ### AWS Glue Catalog Structure
-The platform connects to the following real AWS Glue databases and tables:
-- `crime-data-db` → `crime_data_prd_silver` (columns: location, latitude, longitude, postal_code, city_name, date_time, title, link, description)
-- `events-data-db` → `event_data_prd_silver`
-- `insurance-data-db` → `policy_claims_data_silver` (columns: policyholder_id, first_name, last_name, claim_id, claim_cause, claim_amount_net_eur, policy_id, policy_status, coverage_type, risk_class, and many more)
-- `traffic-data-db` → `traffic_data_prd_silver`
-- `weather-data-db` → `weather_data_prd_silver`
+The platform uses two consolidated Glue databases (staging and prod), each containing all data source tables:
+- **Staging**: `bitech_staging_db` (used when `NODE_ENV !== 'production'`)
+- **Production**: `bitech_prod_db` (used when `NODE_ENV === 'production'`)
+
+Tables (same names in both databases):
+- `crime_data_silver` — Crime statistics and incident data
+- `events_data_silver` — Event scheduling and tracking data
+- `policy_claims_data_silver` — Insurance policy and claims data
+- `traffic_data_silver` — Traffic flow and incident data
+- `weather_data_silver` — Weather conditions and forecasts
+
+The active database is resolved at runtime by `server/aws/config.ts`. All Athena queries, Glue schema discovery, and Lake Formation permissions automatically target the correct database.
 
 ### Athena Configuration
 - Output Location: `s3://bitech-pbac-data-prd/athena-post-op/`
@@ -103,7 +109,7 @@ The platform provides a public REST API for programmatic data access:
 - **Authentication**: `x-api-key` header with API key generated from the API Keys page
 - **Headers**:
   - `x-api-key` (required) - API key for authentication
-  - `x-data-source` (required) - Database name (crime-data-db, events-data-db, insurance-data-db, traffic-data-db, weather-data-db)
+  - `x-data-source` (required) - Short name: `crime`, `events`, `insurance`, `traffic`, `weather` (legacy IDs like `crime-data-db` also accepted)
   - `Accept` - Response format: `application/json` (default) or `text/csv`
 - **Query Parameters**:
   - `columns` - Comma-separated column names (optional, returns all allowed columns if omitted)
