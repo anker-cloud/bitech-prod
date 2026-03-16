@@ -563,53 +563,90 @@ export async function registerRoutes(
 
   app.post("/api/query/execute", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { sql, dataSourceId } = req.body;
+      const { sql, dataSourceId, dataSourceIds } = req.body;
+      const dsIds: string[] = dataSourceIds || (dataSourceId ? [dataSourceId] : []);
 
-      if (!sql?.trim() || !dataSourceId) {
+      if (!sql?.trim() || dsIds.length === 0) {
         return res.status(400).json({ message: "SQL and data source are required" });
       }
 
-      const dataSource = DATA_SOURCES.find(ds => ds.id === dataSourceId);
-      if (!dataSource) {
-        return res.status(400).json({ message: "Invalid data source" });
+      const resolvedSources = dsIds.map((id: string) => {
+        const ds = DATA_SOURCES.find(d => d.id === id);
+        if (!ds) throw new Error(`Invalid data source: ${id}`);
+        return ds;
+      });
+
+      for (const id of dsIds) {
+        if (!validateDataSourceAccess(req, id)) {
+          return res.status(403).json({ 
+            message: "Access Denied!! You do not have Lake Formation permissions to access this data source." 
+          });
+        }
       }
 
-      if (!validateDataSourceAccess(req, dataSourceId)) {
-        return res.status(403).json({ 
-          message: "Access Denied!! You do not have Lake Formation permissions to access this data source." 
-        });
-      }
-
-      const tableName = dataSource.tableName;
-      const { allRows, filters } = getRowFilters(req, dataSourceId, tableName);
-      
       let modifiedSql = sql;
-      if (!allRows && filters.length > 0) {
-        const rowFilterClause = buildRowFilterWhereClause(filters);
-        if (rowFilterClause) {
+      const isMultiTable = dsIds.length > 1;
+
+      if (isMultiTable) {
+        const allFilterClauses: string[] = [];
+        for (let i = 0; i < dsIds.length; i++) {
+          const ds = resolvedSources[i];
+          const alias = `t${i + 1}`;
+          const { allRows, filters } = getRowFilters(req, ds.id, ds.tableName);
+          if (!allRows && filters.length > 0) {
+            const clause = buildRowFilterWhereClause(filters, undefined, alias);
+            if (clause) allFilterClauses.push(`(${clause})`);
+          }
+        }
+        if (allFilterClauses.length > 0) {
+          const combinedFilter = allFilterClauses.join(" AND ");
           const normalizedSql = sql.replace(/\s+/g, ' ');
           const upperSql = normalizedSql.toUpperCase();
-          
           const whereMatch = upperSql.match(/\sWHERE\s/i);
           const groupByMatch = upperSql.match(/\sGROUP\s+BY\s/i);
           const orderByMatch = upperSql.match(/\sORDER\s+BY\s/i);
           const limitMatch = upperSql.match(/\sLIMIT\s/i);
-          
           const whereIndex = whereMatch ? upperSql.indexOf(whereMatch[0]) : -1;
           const groupByIndex = groupByMatch ? upperSql.indexOf(groupByMatch[0]) : -1;
           const orderByIndex = orderByMatch ? upperSql.indexOf(orderByMatch[0]) : -1;
           const limitIndex = limitMatch ? upperSql.indexOf(limitMatch[0]) : -1;
-          
           if (whereIndex !== -1 && whereMatch) {
             const afterWhere = whereIndex + whereMatch[0].length;
-            modifiedSql = normalizedSql.slice(0, afterWhere) + `(${rowFilterClause}) AND (` + normalizedSql.slice(afterWhere) + ")";
+            modifiedSql = normalizedSql.slice(0, afterWhere) + `${combinedFilter} AND (` + normalizedSql.slice(afterWhere) + ")";
           } else {
             let insertPosition = normalizedSql.length;
             if (groupByIndex !== -1) insertPosition = Math.min(insertPosition, groupByIndex);
             if (orderByIndex !== -1) insertPosition = Math.min(insertPosition, orderByIndex);
             if (limitIndex !== -1) insertPosition = Math.min(insertPosition, limitIndex);
-            
-            modifiedSql = normalizedSql.slice(0, insertPosition) + ` WHERE ${rowFilterClause}` + normalizedSql.slice(insertPosition);
+            modifiedSql = normalizedSql.slice(0, insertPosition) + ` WHERE ${combinedFilter}` + normalizedSql.slice(insertPosition);
+          }
+        }
+      } else {
+        const ds = resolvedSources[0];
+        const { allRows, filters } = getRowFilters(req, ds.id, ds.tableName);
+        if (!allRows && filters.length > 0) {
+          const rowFilterClause = buildRowFilterWhereClause(filters);
+          if (rowFilterClause) {
+            const normalizedSql = sql.replace(/\s+/g, ' ');
+            const upperSql = normalizedSql.toUpperCase();
+            const whereMatch = upperSql.match(/\sWHERE\s/i);
+            const groupByMatch = upperSql.match(/\sGROUP\s+BY\s/i);
+            const orderByMatch = upperSql.match(/\sORDER\s+BY\s/i);
+            const limitMatch = upperSql.match(/\sLIMIT\s/i);
+            const whereIndex = whereMatch ? upperSql.indexOf(whereMatch[0]) : -1;
+            const groupByIndex = groupByMatch ? upperSql.indexOf(groupByMatch[0]) : -1;
+            const orderByIndex = orderByMatch ? upperSql.indexOf(orderByMatch[0]) : -1;
+            const limitIndex = limitMatch ? upperSql.indexOf(limitMatch[0]) : -1;
+            if (whereIndex !== -1 && whereMatch) {
+              const afterWhere = whereIndex + whereMatch[0].length;
+              modifiedSql = normalizedSql.slice(0, afterWhere) + `(${rowFilterClause}) AND (` + normalizedSql.slice(afterWhere) + ")";
+            } else {
+              let insertPosition = normalizedSql.length;
+              if (groupByIndex !== -1) insertPosition = Math.min(insertPosition, groupByIndex);
+              if (orderByIndex !== -1) insertPosition = Math.min(insertPosition, orderByIndex);
+              if (limitIndex !== -1) insertPosition = Math.min(insertPosition, limitIndex);
+              modifiedSql = normalizedSql.slice(0, insertPosition) + ` WHERE ${rowFilterClause}` + normalizedSql.slice(insertPosition);
+            }
           }
         }
       }

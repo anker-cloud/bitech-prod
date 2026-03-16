@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useMemo, useEffect } from "react";
+import { useQueries, useMutation } from "@tanstack/react-query";
 import { Database, Play, Download, Code, Wand2, Plus, X, Loader2, ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ export default function DataViewerPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [queryMode, setQueryMode] = useState<"builder" | "custom">("builder");
-  const [selectedDataSource, setSelectedDataSource] = useState<DataSourceId | "">("");
+  const [selectedDataSources, setSelectedDataSources] = useState<DataSourceId[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [filters, setFilters] = useState<QueryFilter[]>([]);
   const [customSql, setCustomSql] = useState("");
@@ -47,42 +47,157 @@ export default function DataViewerPage() {
 
   const accessibleDataSources = useMemo(() => {
     if (!user?.role?.permissions) return [];
+    if (user.role.isAdmin) return [...DATA_SOURCES];
     return DATA_SOURCES.filter((ds) => {
       const permission = user.role?.permissions.find((p) => p.dataSourceId === ds.id);
       return permission?.hasAccess;
     });
   }, [user]);
 
-  const { data: tableColumns, isLoading: isLoadingColumns } = useQuery<TableColumn[]>({
-    queryKey: [`/api/data-sources/${selectedDataSource}/columns`],
-    enabled: !!selectedDataSource,
+  const isMultiTable = selectedDataSources.length > 1;
+
+  const columnQueries = useQueries({
+    queries: selectedDataSources.map((dsId) => ({
+      queryKey: ['/api/data-sources', dsId, 'columns'],
+      queryFn: async () => {
+        const res = await fetch(`/api/data-sources/${dsId}/columns`, {
+          headers: { Authorization: `Bearer ${user?.accessToken}` },
+        });
+        if (!res.ok) throw new Error("Failed to fetch columns");
+        return res.json() as Promise<TableColumn[]>;
+      },
+      enabled: !!dsId,
+    })),
   });
 
+  const isLoadingColumns = columnQueries.some((q) => q.isLoading);
+
+  const columnQueryData = columnQueries.map(q => q.data);
+  const allColumnsPerSource = useMemo(() => {
+    const result: Record<string, TableColumn[]> = {};
+    selectedDataSources.forEach((dsId, i) => {
+      const data = columnQueryData[i];
+      if (data) {
+        const permission = user?.role?.permissions?.find((p) => p.dataSourceId === dsId);
+        const tablePermission = permission?.tables?.[0];
+        if (tablePermission && !tablePermission.allColumns && tablePermission.columns.length > 0) {
+          result[dsId] = data.filter((col: TableColumn) => tablePermission.columns.includes(col.name));
+        } else {
+          result[dsId] = data;
+        }
+      }
+    });
+    return result;
+  }, [selectedDataSources, columnQueryData, user]);
+
   const accessibleColumns = useMemo(() => {
-    if (!tableColumns || !user?.role?.permissions || !selectedDataSource) return [];
-    const permission = user.role.permissions.find((p) => p.dataSourceId === selectedDataSource);
-    if (!permission) return [];
-    const tablePermission = permission.tables[0];
-    if (!tablePermission) return tableColumns;
-    if (tablePermission.allColumns) return tableColumns;
-    return tableColumns.filter((col) => tablePermission.columns.includes(col.name));
-  }, [tableColumns, user, selectedDataSource]);
+    const sources = selectedDataSources;
+    if (sources.length === 0) return [];
+
+    if (sources.length === 1) {
+      return allColumnsPerSource[sources[0]] || [];
+    }
+
+    const columnSets = sources.map((dsId) => {
+      const cols = allColumnsPerSource[dsId] || [];
+      return new Set(cols.map((c) => c.name));
+    });
+
+    if (columnSets.length === 0) return [];
+    const commonNames = [...columnSets[0]].filter((name) =>
+      columnSets.every((set) => set.has(name))
+    );
+
+    const firstSourceCols = allColumnsPerSource[sources[0]] || [];
+    return firstSourceCols.filter((col) => commonNames.includes(col.name));
+  }, [selectedDataSources, allColumnsPerSource]);
+
+  const joinColumns = useMemo(() => {
+    if (!isMultiTable) return [];
+    return accessibleColumns.map((c) => c.name);
+  }, [isMultiTable, accessibleColumns]);
+
+  useEffect(() => {
+    setSelectedColumns([]);
+    setFilters([]);
+  }, [selectedDataSources.join(",")]);
 
   const generatedSql = useMemo(() => {
-    if (!selectedDataSource || selectedColumns.length === 0) return "";
-    
-    const dataSource = DATA_SOURCES.find(ds => ds.id === selectedDataSource);
-    const tableName = dataSource?.tableName || selectedDataSource.replace("-data-db", "");
-    const cols = selectedColumns.join(", ");
-    let sql = `SELECT ${cols}\nFROM ${tableName}`;
-    
+    if (selectedDataSources.length === 0 || selectedColumns.length === 0) return "";
+
+    if (!isMultiTable) {
+      const dsId = selectedDataSources[0];
+      const dataSource = DATA_SOURCES.find((ds) => ds.id === dsId);
+      const tableName = dataSource?.tableName || dsId;
+      const cols = selectedColumns.join(", ");
+      let sql = `SELECT ${cols}\nFROM ${tableName}`;
+
+      if (filters.length > 0) {
+        const whereClause = filters
+          .map((f, i) => {
+            let condition = "";
+            const isStringOp = ["equals", "not_equals", "contains", "not_contains", "in"].includes(f.operator);
+            const quotedCol = `"${f.column}"`;
+            const col = isStringOp ? normalizeGermanExpr(quotedCol) : quotedCol;
+            const val = isStringOp ? normalizeGermanValue(f.value) : f.value;
+            switch (f.operator) {
+              case "equals":
+                condition = `${col} = '${val}'`;
+                break;
+              case "not_equals":
+                condition = `${col} != '${val}'`;
+                break;
+              case "contains":
+                condition = `${col} LIKE '%${val}%'`;
+                break;
+              case "not_contains":
+                condition = `${col} NOT LIKE '%${val}%'`;
+                break;
+              case "greater_than":
+                condition = `${quotedCol} > '${f.value}'`;
+                break;
+              case "less_than":
+                condition = `${quotedCol} < '${f.value}'`;
+                break;
+              case "greater_or_equal":
+                condition = `${quotedCol} >= '${f.value}'`;
+                break;
+              case "less_or_equal":
+                condition = `${quotedCol} <= '${f.value}'`;
+                break;
+            }
+            return i === 0 ? condition : `${f.logic || "AND"} ${condition}`;
+          })
+          .join("\n  ");
+        sql += `\nWHERE ${whereClause}`;
+      }
+
+      return sql;
+    }
+
+    const sources = selectedDataSources.map((dsId, i) => {
+      const ds = DATA_SOURCES.find((d) => d.id === dsId);
+      return { dsId, tableName: ds?.tableName || dsId, alias: `t${i + 1}` };
+    });
+
+    const cols = selectedColumns.map((col) => `t1."${col}"`).join(", ");
+
+    let sql = `SELECT ${cols}\nFROM ${sources[0].tableName} ${sources[0].alias}`;
+
+    for (let i = 1; i < sources.length; i++) {
+      const joinConditions = joinColumns
+        .map((jc) => `${sources[0].alias}."${jc}" = ${sources[i].alias}."${jc}"`)
+        .join(" AND ");
+      sql += `\nINNER JOIN ${sources[i].tableName} ${sources[i].alias} ON ${joinConditions}`;
+    }
+
     if (filters.length > 0) {
       const whereClause = filters
         .map((f, i) => {
           let condition = "";
           const isStringOp = ["equals", "not_equals", "contains", "not_contains", "in"].includes(f.operator);
-          const quotedCol = `"${f.column}"`;
-          const col = isStringOp ? normalizeGermanExpr(quotedCol) : quotedCol;
+          const aliasedCol = `t1."${f.column}"`;
+          const col = isStringOp ? normalizeGermanExpr(aliasedCol) : aliasedCol;
           const val = isStringOp ? normalizeGermanValue(f.value) : f.value;
           switch (f.operator) {
             case "equals":
@@ -98,16 +213,16 @@ export default function DataViewerPage() {
               condition = `${col} NOT LIKE '%${val}%'`;
               break;
             case "greater_than":
-              condition = `${quotedCol} > '${f.value}'`;
+              condition = `${aliasedCol} > '${f.value}'`;
               break;
             case "less_than":
-              condition = `${quotedCol} < '${f.value}'`;
+              condition = `${aliasedCol} < '${f.value}'`;
               break;
             case "greater_or_equal":
-              condition = `${quotedCol} >= '${f.value}'`;
+              condition = `${aliasedCol} >= '${f.value}'`;
               break;
             case "less_or_equal":
-              condition = `${quotedCol} <= '${f.value}'`;
+              condition = `${aliasedCol} <= '${f.value}'`;
               break;
           }
           return i === 0 ? condition : `${f.logic || "AND"} ${condition}`;
@@ -115,12 +230,12 @@ export default function DataViewerPage() {
         .join("\n  ");
       sql += `\nWHERE ${whereClause}`;
     }
-    
+
     return sql;
-  }, [selectedDataSource, selectedColumns, filters]);
+  }, [selectedDataSources, selectedColumns, filters, isMultiTable, joinColumns]);
 
   const queryMutation = useMutation({
-    mutationFn: async (config: { sql: string; dataSourceId: string }): Promise<QueryResult> => {
+    mutationFn: async (config: { sql: string; dataSourceIds: string[] }): Promise<QueryResult> => {
       const response = await apiRequest("POST", "/api/query/execute", config);
       return response.json();
     },
@@ -143,26 +258,26 @@ export default function DataViewerPage() {
       });
       return;
     }
-    if (!selectedDataSource) {
+    if (selectedDataSources.length === 0) {
       toast({
         title: "No data source selected",
-        description: "Please select a data source first",
+        description: "Please select at least one data source",
         variant: "destructive",
       });
       return;
     }
-    queryMutation.mutate({ sql, dataSourceId: selectedDataSource });
+    queryMutation.mutate({ sql, dataSourceIds: selectedDataSources });
   };
 
   const handleExportCsv = () => {
     if (!queryMutation.data) return;
-    
+
     const { columns, rows } = queryMutation.data;
     const csvContent = [
       columns.join(","),
       ...rows.map((row) => columns.map((col) => `"${row[col] ?? ""}"`).join(",")),
     ].join("\n");
-    
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -173,11 +288,12 @@ export default function DataViewerPage() {
   };
 
   const addFilter = () => {
-    if (accessibleColumns.length === 0) return;
+    const filterColumns = isMultiTable ? accessibleColumns.filter(c => joinColumns.includes(c.name)) : accessibleColumns;
+    if (filterColumns.length === 0) return;
     setFilters([
       ...filters,
       {
-        column: accessibleColumns[0].name,
+        column: filterColumns[0].name,
         operator: "equals",
         value: "",
         logic: filters.length > 0 ? "AND" : undefined,
@@ -202,6 +318,14 @@ export default function DataViewerPage() {
       setSelectedColumns([...selectedColumns, columnName]);
     } else {
       setSelectedColumns(selectedColumns.filter((c) => c !== columnName));
+    }
+  };
+
+  const handleDataSourceToggle = (dsId: DataSourceId, checked: boolean) => {
+    if (checked) {
+      setSelectedDataSources([...selectedDataSources, dsId]);
+    } else {
+      setSelectedDataSources(selectedDataSources.filter((id) => id !== dsId));
     }
   };
 
@@ -242,11 +366,18 @@ export default function DataViewerPage() {
     }
   };
 
+  const filterableColumns = useMemo(() => {
+    if (isMultiTable) {
+      return accessibleColumns.filter((c) => joinColumns.includes(c.name));
+    }
+    return accessibleColumns;
+  }, [isMultiTable, accessibleColumns, joinColumns]);
+
   if (accessibleDataSources.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8">
         <Database className="h-16 w-16 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold mb-2">No Data Sources Available</h2>
+        <h2 className="text-xl font-semibold mb-2" data-testid="text-no-data-sources">No Data Sources Available</h2>
         <p className="text-muted-foreground text-center max-w-md">
           You don't have access to any data sources. Please contact your administrator to request access.
         </p>
@@ -283,26 +414,34 @@ export default function DataViewerPage() {
         <div className="w-80 border-r flex flex-col">
           <div className="p-4 space-y-4 overflow-auto flex-1">
             <div className="space-y-2">
-              <Label>Data Source</Label>
-              <Select
-                value={selectedDataSource}
-                onValueChange={(value: DataSourceId) => {
-                  setSelectedDataSource(value);
-                  setSelectedColumns([]);
-                  setFilters([]);
-                }}
-              >
-                <SelectTrigger data-testid="select-data-source">
-                  <SelectValue placeholder="Select a data source" />
-                </SelectTrigger>
-                <SelectContent>
+              <Label>Data Sources</Label>
+              <ScrollArea className="h-32 rounded-md border p-2">
+                <div className="space-y-2">
                   {accessibleDataSources.map((ds) => (
-                    <SelectItem key={ds.id} value={ds.id}>
-                      {ds.name}
-                    </SelectItem>
+                    <div key={ds.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`ds-${ds.id}`}
+                        checked={selectedDataSources.includes(ds.id)}
+                        onCheckedChange={(checked) => handleDataSourceToggle(ds.id, checked as boolean)}
+                        data-testid={`checkbox-datasource-${ds.id}`}
+                      />
+                      <label htmlFor={`ds-${ds.id}`} className="text-sm flex-1 cursor-pointer">
+                        {ds.name}
+                      </label>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              </ScrollArea>
+              {isMultiTable && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <Badge variant="secondary" className="text-xs" data-testid="badge-join-mode">
+                    JOIN Mode
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {joinColumns.length} common column{joinColumns.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              )}
             </div>
 
             <Tabs value={queryMode} onValueChange={(v) => setQueryMode(v as "builder" | "custom")}>
@@ -318,11 +457,11 @@ export default function DataViewerPage() {
               </TabsList>
 
               <TabsContent value="builder" className="space-y-4 mt-4">
-                {selectedDataSource && (
+                {selectedDataSources.length > 0 && (
                   <>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label>Columns</Label>
+                        <Label>{isMultiTable ? "Common Columns" : "Columns"}</Label>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="sm" onClick={selectAllColumns} className="h-6 text-xs">
                             All
@@ -338,6 +477,10 @@ export default function DataViewerPage() {
                             <Skeleton key={i} className="h-6 w-full" />
                           ))}
                         </div>
+                      ) : accessibleColumns.length === 0 && isMultiTable ? (
+                        <p className="text-xs text-muted-foreground text-center py-2" data-testid="text-no-common-columns">
+                          No common columns found between the selected tables
+                        </p>
                       ) : (
                         <ScrollArea className="h-48 rounded-md border p-2">
                           <div className="space-y-2">
@@ -364,12 +507,12 @@ export default function DataViewerPage() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label>Filters</Label>
+                        <Label>Filters {isMultiTable && <span className="text-xs text-muted-foreground">(join columns only)</span>}</Label>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={addFilter}
-                          disabled={accessibleColumns.length === 0}
+                          disabled={filterableColumns.length === 0}
                           className="h-6"
                           data-testid="button-add-filter"
                         >
@@ -404,7 +547,7 @@ export default function DataViewerPage() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {accessibleColumns.map((col) => (
+                                    {filterableColumns.map((col) => (
                                       <SelectItem key={col.name} value={col.name}>
                                         {col.name}
                                       </SelectItem>
@@ -476,7 +619,7 @@ export default function DataViewerPage() {
             {queryMode === "builder" && generatedSql && (
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Generated SQL</Label>
-                <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto font-mono">
+                <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto font-mono" data-testid="text-generated-sql">
                   {generatedSql}
                 </pre>
               </div>
@@ -484,7 +627,7 @@ export default function DataViewerPage() {
             <Button
               className="w-full"
               onClick={handleRunQuery}
-              disabled={queryMutation.isPending || (!generatedSql && queryMode === "builder") || (!customSql && queryMode === "custom")}
+              disabled={queryMutation.isPending || (!generatedSql && queryMode === "builder") || (!customSql && queryMode === "custom") || selectedDataSources.length === 0}
               data-testid="button-run-query"
             >
               {queryMutation.isPending ? (
@@ -514,7 +657,7 @@ export default function DataViewerPage() {
             <>
               <div className="p-4 border-b flex items-center justify-between bg-muted/30">
                 <div className="flex items-center gap-4">
-                  <Badge variant="secondary">{queryMutation.data.totalRows} rows</Badge>
+                  <Badge variant="secondary" data-testid="badge-row-count">{queryMutation.data.totalRows} rows</Badge>
                   <span className="text-sm text-muted-foreground">
                     Executed in {queryMutation.data.executionTimeMs}ms
                   </span>

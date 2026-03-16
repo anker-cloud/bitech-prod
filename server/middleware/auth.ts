@@ -85,6 +85,10 @@ export function validateDataSourceAccess(
   req: AuthenticatedRequest,
   dataSourceId: string
 ): boolean {
+  if (req.user?.role?.isAdmin) {
+    return true;
+  }
+
   if (!req.user?.role?.permissions) {
     return false;
   }
@@ -174,7 +178,7 @@ function quoteIdentifier(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
 
-export function buildRowFilterWhereClause(filters: RowFilterCondition[], allowedColumns?: string[]): string {
+export function buildRowFilterWhereClause(filters: RowFilterCondition[], allowedColumns?: string[], tableAlias?: string): string {
   if (filters.length === 0) {
     return "";
   }
@@ -192,10 +196,10 @@ export function buildRowFilterWhereClause(filters: RowFilterCondition[], allowed
       throw new Error(`Invalid operator: ${filter.operator}`);
     }
     
-    const quotedColumn = quoteIdentifier(filter.column);
+    const colRef = tableAlias ? `${tableAlias}.${quoteIdentifier(filter.column)}` : quoteIdentifier(filter.column);
     const escapedValue = filter.value.replace(/'/g, "''");
     const useNormalization = isStringFilterOperator(filter.operator);
-    const normalizedCol = useNormalization ? normalizeGermanExpr(quotedColumn) : quotedColumn;
+    const normalizedCol = useNormalization ? normalizeGermanExpr(colRef) : colRef;
     const normalizedVal = useNormalization ? normalizeGermanValue(escapedValue) : escapedValue;
     let condition: string;
 
@@ -210,10 +214,10 @@ export function buildRowFilterWhereClause(filters: RowFilterCondition[], allowed
         condition = `${normalizedCol} LIKE '%${normalizedVal}%'`;
         break;
       case "greater_than":
-        condition = `${quotedColumn} > '${escapedValue}'`;
+        condition = `${colRef} > '${escapedValue}'`;
         break;
       case "less_than":
-        condition = `${quotedColumn} < '${escapedValue}'`;
+        condition = `${colRef} < '${escapedValue}'`;
         break;
       case "in":
         const values = filter.value.split(",").map(v => `'${normalizeGermanValue(v.trim().replace(/'/g, "''"))}'`).join(", ");

@@ -120,3 +120,14 @@ The platform provides a public REST API for programmatic data access:
   - Keys inherit the user's role permissions (column/row restrictions apply)
   - Keys can be revoked at any time from the API Keys page
 - **Note**: Athena does not support OFFSET, so pagination is limited to LIMIT only
+
+### Multi-Table JOIN Query Builder
+The Data Viewer supports querying multiple data sources simultaneously using INNER JOINs:
+- Users can select multiple data sources via checkboxes in the sidebar
+- When multiple sources are selected, the app auto-detects common columns (intersection of column names across all selected tables)
+- These common columns become the join keys and the only filterable columns
+- The generated SQL uses table aliases (t1, t2, ...) with INNER JOIN on all common columns
+- Both the visual query builder and custom SQL editor support multi-source selection
+- Backend validates permissions for ALL selected data sources before executing
+- Row-level permission filters are applied per-source with correct table aliases
+- The `/api/query/execute` endpoint accepts either `dataSourceId` (string) or `dataSourceIds` (string array)
