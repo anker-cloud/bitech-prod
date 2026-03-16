@@ -186,7 +186,16 @@ export default function DataViewerPage() {
 
     for (let i = 1; i < sources.length; i++) {
       const joinConditions = joinColumns
-        .map((jc) => `${sources[0].alias}."${jc}" = ${sources[i].alias}."${jc}"`)
+        .map((jc) => {
+          const leftCols = allColumnsPerSource[sources[0].dsId] || [];
+          const rightCols = allColumnsPerSource[sources[i].dsId] || [];
+          const leftType = leftCols.find((c) => c.name === jc)?.type || "string";
+          const rightType = rightCols.find((c) => c.name === jc)?.type || "string";
+          const needsCast = leftType !== rightType;
+          const leftRef = needsCast ? `CAST(${sources[0].alias}."${jc}" AS VARCHAR)` : `${sources[0].alias}."${jc}"`;
+          const rightRef = needsCast ? `CAST(${sources[i].alias}."${jc}" AS VARCHAR)` : `${sources[i].alias}."${jc}"`;
+          return `${leftRef} = ${rightRef}`;
+        })
         .join(" AND ");
       sql += `\nINNER JOIN ${sources[i].tableName} ${sources[i].alias} ON ${joinConditions}`;
     }
@@ -232,7 +241,7 @@ export default function DataViewerPage() {
     }
 
     return sql;
-  }, [selectedDataSources, selectedColumns, filters, isMultiTable, joinColumns]);
+  }, [selectedDataSources, selectedColumns, filters, isMultiTable, joinColumns, allColumnsPerSource]);
 
   const queryMutation = useMutation({
     mutationFn: async (config: { sql: string; dataSourceIds: string[] }): Promise<QueryResult> => {
