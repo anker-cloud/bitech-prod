@@ -47,10 +47,10 @@ Parameters:
 
   DBPassword:
     Type: String
-    Default: Bitech#Stg2026
+    Default: BitechStg2026!
     NoEcho: true
     MinLength: 8
-    Description: RDS master password (min 8 chars; no / @ " or spaces allowed by RDS)
+    Description: RDS master password (min 8 chars; no / @ " # or spaces — use URL-safe chars only)
 
   DBInstanceClass:
     Type: String
