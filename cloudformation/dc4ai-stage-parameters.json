@@ -13,11 +13,11 @@
   },
   {
     "ParameterKey": "EC2InstanceType",
-    "ParameterValue": "t3.small"
+    "ParameterValue": "t3.medium"
   },
   {
     "ParameterKey": "EC2KeyPairName",
-    "ParameterValue": "REPLACE_WITH_YOUR_KEY_PAIR_NAME"
+    "ParameterValue": "stage-bitech"
   },
   {
     "ParameterKey": "DBUsername",
@@ -25,19 +25,19 @@
   },
   {
     "ParameterKey": "DBPassword",
-    "ParameterValue": "REPLACE_WITH_YOUR_DB_PASSWORD"
+    "ParameterValue": "Bitech@123"
   },
   {
     "ParameterKey": "DBInstanceClass",
-    "ParameterValue": "db.t3.micro"
+    "ParameterValue": "db.t3.small"
   },
   {
     "ParameterKey": "CognitoUserPoolId",
-    "ParameterValue": "REPLACE_WITH_COGNITO_USER_POOL_ID"
+    "ParameterValue": "eu-central-1_ILiBFISx7"
   },
   {
     "ParameterKey": "CognitoClientId",
-    "ParameterValue": "REPLACE_WITH_COGNITO_CLIENT_ID"
+    "ParameterValue": "21fcp7rd3630nfpk9kvg7ukdci"
   },
   {
     "ParameterKey": "AthenaOutputLocation",
@@ -45,18 +45,18 @@
   },
   {
     "ParameterKey": "GitHubOwner",
-    "ParameterValue": "REPLACE_WITH_GITHUB_OWNER"
+    "ParameterValue": "anker-cloud"
   },
   {
     "ParameterKey": "GitHubRepo",
-    "ParameterValue": "REPLACE_WITH_GITHUB_REPO_NAME"
+    "ParameterValue": "bitech-staging"
   },
   {
     "ParameterKey": "GitHubBranch",
-    "ParameterValue": "staging"
+    "ParameterValue": "stage"
   },
   {
     "ParameterKey": "GitHubCodeStarConnectionArn",
-    "ParameterValue": "REPLACE_WITH_CODESTAR_CONNECTION_ARN"
+    "ParameterValue": "arn:aws:codeconnections:eu-central-1:072012508476:connection/4b757579-d17b-43bf-bedf-a0f6fb665c1b"
   }
 ]
