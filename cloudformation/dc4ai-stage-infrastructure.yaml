@@ -793,7 +793,7 @@ Resources:
           source /etc/dc4ai.env
           cd /opt/dc4ai
           pm2 delete dc4ai 2>/dev/null || true
-          pm2 start dist/index.cjs --name dc4ai --env-file /etc/dc4ai.env
+          pm2 start dist/index.cjs --name dc4ai
           pm2 save
           pm2 startup systemd -u root --hp /root | tail -1 | bash
           DEPLOY
