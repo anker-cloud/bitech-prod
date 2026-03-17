@@ -1,0 +1,81 @@
+[Container] 2026/03/17 11:42:50.325740 Processing environment variables
+[Container] 2026/03/17 11:42:50.565381 No runtime version selected in buildspec.
+[Container] 2026/03/17 11:42:50.622357 Moving to directory /codebuild/output/src2645404815/src
+[Container] 2026/03/17 11:42:50.622401 Cache is not defined in the buildspec
+[Container] 2026/03/17 11:42:50.665691 Skip cache due to: no paths specified to be cached
+[Container] 2026/03/17 11:42:50.665934 Registering with agent
+[Container] 2026/03/17 11:42:50.704931 Phases found in YAML: 3
+[Container] 2026/03/17 11:42:50.704956  PRE_BUILD: 5 commands
+[Container] 2026/03/17 11:42:50.704961  BUILD: 2 commands
+[Container] 2026/03/17 11:42:50.704965  POST_BUILD: 10 commands
+[Container] 2026/03/17 11:42:50.705289 Phase complete: DOWNLOAD_SOURCE State: SUCCEEDED
+[Container] 2026/03/17 11:42:50.705306 Phase context status code:  Message: 
+[Container] 2026/03/17 11:42:50.810355 Entering phase INSTALL
+[Container] 2026/03/17 11:42:50.851376 Phase complete: INSTALL State: SUCCEEDED
+[Container] 2026/03/17 11:42:50.851398 Phase context status code:  Message: 
+[Container] 2026/03/17 11:42:50.886270 Entering phase PRE_BUILD
+[Container] 2026/03/17 11:42:50.923918 Running command echo Logging in to ECR...
+Logging in to ECR...
+
+[Container] 2026/03/17 11:42:50.931923 Running command aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+WARNING! Your credentials are stored unencrypted in '/root/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+Login Succeeded
+
+[Container] 2026/03/17 11:43:05.212976 Running command REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
+
+[Container] 2026/03/17 11:43:05.220703 Running command COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+
+[Container] 2026/03/17 11:43:05.263380 Running command IMAGE_TAG=${COMMIT_HASH:=latest}
+
+[Container] 2026/03/17 11:43:05.270593 Phase complete: PRE_BUILD State: SUCCEEDED
+[Container] 2026/03/17 11:43:05.270606 Phase context status code:  Message: 
+[Container] 2026/03/17 11:43:05.309383 Entering phase BUILD
+[Container] 2026/03/17 11:43:05.310583 Running command echo Building Docker image...
+Building Docker image...
+
+[Container] 2026/03/17 11:43:05.317989 Running command docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2B done
+#1 DONE 0.0s
+ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory
+
+[Container] 2026/03/17 11:43:05.623568 Command did not exit successfully docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG . exit status 1
+[Container] 2026/03/17 11:43:05.629989 Phase complete: BUILD State: FAILED
+[Container] 2026/03/17 11:43:05.630004 Phase context status code: COMMAND_EXECUTION_ERROR Message: Error while executing command: docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .. Reason: exit status 1
+[Container] 2026/03/17 11:43:05.666266 Entering phase POST_BUILD
+[Container] 2026/03/17 11:43:05.667440 Running command echo Pushing image to ECR...
+Pushing image to ECR...
+
+[Container] 2026/03/17 11:43:05.676295 Running command docker push $REPOSITORY_URI:latest
+The push refers to repository [072012508476.dkr.ecr.eu-central-1.amazonaws.com/dc4ai-staging]
+An image does not exist locally with the tag: 072012508476.dkr.ecr.eu-central-1.amazonaws.com/dc4ai-staging
+
+[Container] 2026/03/17 11:43:05.701753 Command did not exit successfully docker push $REPOSITORY_URI:latest exit status 1
+[Container] 2026/03/17 11:43:05.709195 Phase complete: POST_BUILD State: FAILED
+[Container] 2026/03/17 11:43:05.709209 Phase context status code: COMMAND_EXECUTION_ERROR Message: Error while executing command: docker push $REPOSITORY_URI:latest. Reason: exit status 1
+[Container] 2026/03/17 11:43:05.804446 Expanding base directory path: .
+[Container] 2026/03/17 11:43:05.807781 Assembling file list
+[Container] 2026/03/17 11:43:05.807794 Expanding .
+[Container] 2026/03/17 11:43:05.811121 Expanding file paths for base directory .
+[Container] 2026/03/17 11:43:05.811131 Assembling file list
+[Container] 2026/03/17 11:43:05.811134 Expanding appspec.yml
+[Container] 2026/03/17 11:43:05.814294 Skipping invalid file path appspec.yml
+[Container] 2026/03/17 11:43:05.814308 Expanding scripts/**
+[Container] 2026/03/17 11:43:05.817886 Set report auto-discover timeout to 5 seconds
+[Container] 2026/03/17 11:43:05.817923 Expanding base directory path:  .
+[Container] 2026/03/17 11:43:05.821025 Assembling file list
+[Container] 2026/03/17 11:43:05.821038 Expanding .
+[Container] 2026/03/17 11:43:05.824171 Expanding file paths for base directory .
+[Container] 2026/03/17 11:43:05.824184 Assembling file list
+[Container] 2026/03/17 11:43:05.824218 Expanding **/*
+[Container] 2026/03/17 11:43:05.827903 No matching auto-discover report paths found
+[Container] 2026/03/17 11:43:05.827997 Report auto-discover file discovery took 0.010111 seconds
+[Container] 2026/03/17 11:43:05.828010 Phase complete: UPLOAD_ARTIFACTS State: FAILED
+[Container] 2026/03/17 11:43:05.828017 Phase context status code: CLIENT_ERROR Message: no matching artifact paths found
+no matching artifact paths found
