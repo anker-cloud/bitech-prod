@@ -767,8 +767,8 @@ Resources:
           cat > /opt/dc4ai/deploy.sh <<'DEPLOY'
           #!/bin/bash
           set -e
-          REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          REGION=${AWS::Region}
+          ACCOUNT=${AWS::AccountId}
           IMAGE="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com/dc4ai-staging:latest"
 
           # Authenticate to ECR
