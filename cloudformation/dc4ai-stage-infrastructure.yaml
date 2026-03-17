@@ -795,7 +795,8 @@ Resources:
           pm2 delete dc4ai 2>/dev/null || true
           pm2 start dist/index.cjs --name dc4ai
           pm2 save
-          pm2 startup systemd -u root --hp /root | tail -1 | bash
+          pm2 startup systemd -u root --hp /root || true
+          systemctl enable pm2-root 2>/dev/null || true
           DEPLOY
           chmod +x /opt/dc4ai/deploy.sh
 
