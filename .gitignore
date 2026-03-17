@@ -4,3 +4,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# CloudFormation parameter files with sensitive values
+cloudformation/*-parameters.json
