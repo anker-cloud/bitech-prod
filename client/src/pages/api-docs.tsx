@@ -278,7 +278,6 @@ console.log(data);`;
                     <TableCell>
                       Short name of the data source to query. Use this for single-source queries.
                       Accepted values: <code className="bg-muted px-1 rounded">crime</code>, <code className="bg-muted px-1 rounded">events</code>, <code className="bg-muted px-1 rounded">insurance</code>, <code className="bg-muted px-1 rounded">traffic</code>, <code className="bg-muted px-1 rounded">weather</code>.
-                      Legacy IDs (e.g. <code className="bg-muted px-1 rounded">crime-data-db</code>) are also accepted.
                     </TableCell>
                   </TableRow>
                   <TableRow className="bg-muted/30">
@@ -386,21 +385,21 @@ console.log(data);`;
                       <TableHeader>
                         <TableRow>
                           <TableHead>Short name</TableHead>
-                          <TableHead>Full ID</TableHead>
+                          <TableHead>Name</TableHead>
                           <TableHead>Description</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {[
-                          { short: "crime", id: "crime-data-db", desc: "Crime statistics and incident data" },
-                          { short: "events", id: "events-data-db", desc: "Event scheduling and tracking" },
-                          { short: "insurance", id: "insurance-data-db", desc: "Policy and claims data" },
-                          { short: "traffic", id: "traffic-data-db", desc: "Traffic flow and incidents" },
-                          { short: "weather", id: "weather-data-db", desc: "Weather conditions and forecasts" },
+                          { short: "crime",     name: "Crime Data",     desc: "Crime statistics and incident data" },
+                          { short: "events",    name: "Events Data",    desc: "Event scheduling and tracking data" },
+                          { short: "insurance", name: "Insurance Data", desc: "Policy and claims data for insurance analytics" },
+                          { short: "traffic",   name: "Traffic Data",   desc: "Traffic flow and incident data" },
+                          { short: "weather",   name: "Weather Data",   desc: "Weather conditions and forecasts" },
                         ].map(ds => (
                           <TableRow key={ds.short}>
                             <TableCell><code className="bg-muted px-1 rounded">{ds.short}</code></TableCell>
-                            <TableCell className="text-muted-foreground font-mono text-xs">{ds.id}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{ds.name}</TableCell>
                             <TableCell className="text-muted-foreground text-sm">{ds.desc}</TableCell>
                           </TableRow>
                         ))}
