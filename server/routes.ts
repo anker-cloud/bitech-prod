@@ -930,7 +930,7 @@ export async function registerRoutes(
             totalRows: result.totalRows,
             limit,
             joinMode: true,
-            sources: resolvedSources.map(s => s.resolvedId),
+            sources: resolvedSources.map(s => s.config?.shortName || s.resolvedId),
             joinColumns,
             executionTimeMs: result.executionTimeMs,
             columns: result.columns,
