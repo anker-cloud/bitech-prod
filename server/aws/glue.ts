@@ -7,11 +7,7 @@ import { DATA_SOURCES } from "@shared/schema";
 import { getActiveDatabase } from "./config";
 
 const client = new GlueClient({
-  region: process.env.AWS_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
+  region: process.env.AWS_REGION || "eu-central-1",
 });
 
 export interface TableColumn {
