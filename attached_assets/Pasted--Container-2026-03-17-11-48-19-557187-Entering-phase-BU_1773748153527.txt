@@ -1,0 +1,41 @@
+[Container] 2026/03/17 11:48:19.557187 Entering phase BUILD
+[Container] 2026/03/17 11:48:19.558327 Running command echo Building Docker image...
+Building Docker image...
+
+[Container] 2026/03/17 11:48:19.568535 Running command docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.35kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:20-alpine
+#2 ERROR: failed to copy: httpReadSeeker: failed open: unexpected status from GET request to https://registry-1.docker.io/v2/library/node/manifests/sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa: 429 Too Many Requests
+toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit
+------
+ > [internal] load metadata for docker.io/library/node:20-alpine:
+------
+Dockerfile:1
+--------------------
+   1 | >>> FROM node:20-alpine AS builder
+   2 |     
+   3 |     WORKDIR /app
+--------------------
+ERROR: failed to build: failed to solve: node:20-alpine: failed to resolve source metadata for docker.io/library/node:20-alpine: failed to copy: httpReadSeeker: failed open: unexpected status from GET request to https://registry-1.docker.io/v2/library/node/manifests/sha256:b88333c42c23fbd91596ebd7fd10de239cedab9617de04142dde7315e3bc0afa: 429 Too Many Requests
+toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit
+
+[Container] 2026/03/17 11:48:22.277563 Command did not exit successfully docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG . exit status 1
+[Container] 2026/03/17 11:48:22.284313 Phase complete: BUILD State: FAILED
+[Container] 2026/03/17 11:48:22.284329 Phase context status code: COMMAND_EXECUTION_ERROR Message: Error while executing command: docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .. Reason: exit status 1
+[Container] 2026/03/17 11:48:22.321967 Entering phase POST_BUILD
+[Container] 2026/03/17 11:48:22.323178 Running command echo Pushing image to ECR...
+Pushing image to ECR...
+
+[Container] 2026/03/17 11:48:22.331112 Running command docker push $REPOSITORY_URI:latest
+The push refers to repository [072012508476.dkr.ecr.eu-central-1.amazonaws.com/dc4ai-staging]
+An image does not exist locally with the tag: 072012508476.dkr.ecr.eu-central-1.amazonaws.com/dc4ai-staging
+
+[Container] 2026/03/17 11:48:22.350904 Command did not exit successfully docker push $REPOSITORY_URI:latest exit status 1
+[Container] 2026/03/17 11:48:22.357252 Phase complete: POST_BUILD State: FAILED
+[Container] 2026/03/17 11:48:22.357269 Phase context status code: COMMAND_EXECUTION_ERROR Message: Error while executing command: docker push $REPOSITORY_URI:latest. Reason: exit status 1
+[Container] 2026/03/17 11:48:22.456927 Expanding base directory path: .
