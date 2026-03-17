@@ -29,6 +29,10 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
