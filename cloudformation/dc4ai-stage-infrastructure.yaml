@@ -789,8 +789,10 @@ Resources:
           docker cp dc4ai-extract:/app/node_modules /opt/dc4ai/node_modules 2>/dev/null || true
           docker rm dc4ai-extract
 
-          # (Re)start with PM2
+          # (Re)start with PM2 — set -a exports all vars to child processes
+          set -a
           source /etc/dc4ai.env
+          set +a
           cd /opt/dc4ai
           pm2 delete dc4ai 2>/dev/null || true
           pm2 start dist/index.cjs --name dc4ai
