@@ -718,6 +718,8 @@ Resources:
           # ---- System packages ----
           dnf update -y
           dnf install -y nodejs npm git docker aws-cli jq
+          systemctl enable docker
+          systemctl start docker
 
           # ---- CloudWatch agent (optional but useful for staging) ----
           dnf install -y amazon-cloudwatch-agent
