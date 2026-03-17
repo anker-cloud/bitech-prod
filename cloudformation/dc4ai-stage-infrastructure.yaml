@@ -522,6 +522,14 @@ Resources:
                 Resource:
                   - arn:aws:s3:::bitech-*
                   - arn:aws:s3:::bitech-*/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
         - PolicyName: LakeFormationAccess
           PolicyDocument:
             Version: '2012-10-17'
