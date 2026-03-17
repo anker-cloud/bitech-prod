@@ -396,7 +396,7 @@ Resources:
       Name: !Sub ${ProjectName}/${Environment}/database-url
       Description: PostgreSQL connection string for staging
       SecretString: !Sub
-        - 'postgresql://${Username}:${Password}@${Endpoint}:5432/postgres'
+        - 'postgresql://${Username}:${Password}@${Endpoint}:5432/postgres?sslmode=require'
         - Username: !Ref DBUsername
           Password: !Ref DBPassword
           Endpoint: !GetAtt RDSInstance.Endpoint.Address
