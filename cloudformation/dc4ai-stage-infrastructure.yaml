@@ -26,7 +26,7 @@ Parameters:
   # ---- EC2 ----
   EC2InstanceType:
     Type: String
-    Default: t3.small
+    Default: t3.medium
     AllowedValues:
       - t3.micro
       - t3.small
@@ -36,24 +36,25 @@ Parameters:
 
   EC2KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
+    Default: stage-bitech
     Description: EC2 key pair name for SSH access (must already exist in your account)
 
   # ---- Database ----
   DBUsername:
     Type: String
     Default: dc4ai_admin
-    NoEcho: true
     Description: RDS master username
 
   DBPassword:
     Type: String
+    Default: Bitech@123
     NoEcho: true
     MinLength: 8
     Description: RDS master password (min 8 characters)
 
   DBInstanceClass:
     Type: String
-    Default: db.t3.micro
+    Default: db.t3.small
     AllowedValues:
       - db.t3.micro
       - db.t3.small
@@ -63,12 +64,14 @@ Parameters:
   # ---- Auth ----
   CognitoUserPoolId:
     Type: String
+    Default: eu-central-1_ILiBFISx7
     Description: >
       Cognito User Pool ID shared with production
       (e.g. eu-central-1_XXXXXXXXX)
 
   CognitoClientId:
     Type: String
+    Default: 21fcp7rd3630nfpk9kvg7ukdci
     Description: Cognito App Client ID (must have ADMIN_USER_PASSWORD_AUTH enabled)
 
   # ---- Data / AWS ----
@@ -82,19 +85,22 @@ Parameters:
   # ---- GitHub CI/CD ----
   GitHubOwner:
     Type: String
+    Default: anker-cloud
     Description: GitHub organisation or username that owns the repo (e.g. my-org)
 
   GitHubRepo:
     Type: String
-    Description: GitHub repository name (e.g. dc4ai)
+    Default: bitech-staging
+    Description: GitHub repository name only (e.g. bitech-staging — not the full URL)
 
   GitHubBranch:
     Type: String
-    Default: staging
+    Default: main
     Description: Branch to track for staging deployments
 
   GitHubCodeStarConnectionArn:
     Type: String
+    Default: arn:aws:codeconnections:eu-central-1:072012508476:connection/4b757579-d17b-43bf-bedf-a0f6fb665c1b
     Description: >
       ARN of an existing AWS CodeStar connection to GitHub.
       Create one in the Console under Developer Tools → Connections,

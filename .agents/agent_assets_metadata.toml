@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "nQDTEZG-bws1uPBaLKDWa"
+uri = "file://cloudformation/dc4ai-stage-infrastructure.yaml"
+type = "unspecified"
+title = "dc4ai-stage-infrastructure.yaml"
