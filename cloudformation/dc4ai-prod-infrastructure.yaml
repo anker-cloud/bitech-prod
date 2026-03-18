@@ -1,0 +1,1171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Bitech DC4AI - Production Infrastructure Stack (EC2 + ALB + RDS + CodePipeline/GitHub)'
+
+# ============================================================
+# PARAMETERS
+# ============================================================
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: dc4ai
+    Description: Project name used for all resource naming
+
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+    Description: Fixed to production for this template
+
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR for the production VPC (must not overlap with staging 10.1.0.0/16)
+
+  # ---- EC2 ----
+  EC2InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+    Description: EC2 instance type for the application server
+
+  EC2KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: prod-bitech
+    Description: EC2 key pair name for SSH access (must already exist in your account)
+
+  # ---- Database ----
+  DBUsername:
+    Type: String
+    Default: dc4ai_admin
+    Description: RDS master username
+
+  DBPassword:
+    Type: String
+    Default: 9932137822
+    NoEcho: true
+    MinLength: 8
+    Description: RDS master password (min 8 chars; no / @ " # or spaces — use URL-safe chars only)
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.small
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+    Description: RDS instance class
+
+  # ---- Auth ----
+  CognitoUserPoolId:
+    Type: String
+    Default: eu-central-1_ILiBFISx7
+    Description: >
+      Cognito User Pool ID shared with staging
+      (e.g. eu-central-1_XXXXXXXXX)
+
+  CognitoClientId:
+    Type: String
+    Default: 21fcp7rd3630nfpk9kvg7ukdci
+    Description: Cognito App Client ID (must have ADMIN_USER_PASSWORD_AUTH enabled)
+
+  # ---- Data / AWS ----
+  AthenaOutputLocation:
+    Type: String
+    Default: s3://bitech-pbac-data-prd/athena-post-op/
+    Description: >
+      S3 location for Athena query results in production.
+      Bucket bitech-pbac-data-prd must exist before deploying.
+
+  # ---- GitHub CI/CD ----
+  GitHubOwner:
+    Type: String
+    Default: anker-cloud
+    Description: GitHub organisation or username that owns the repo
+
+  GitHubRepo:
+    Type: String
+    Default: bitech-prod
+    Description: GitHub repository name only (e.g. bitech-prod)
+
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Branch to track for production deployments
+
+  GitHubCodeStarConnectionArn:
+    Type: String
+    Default: REPLACE_WITH_PROD_CODESTAR_CONNECTION_ARN
+    Description: >
+      ARN of the AWS CodeStar connection for anker-cloud/bitech-prod.
+      Create one in the Console under Developer Tools -> Connections,
+      authorize it for the bitech-prod repo, then paste its ARN here.
+
+# ============================================================
+# MAPPINGS
+# ============================================================
+Mappings:
+  SubnetConfig:
+    PublicSubnet1:
+      CIDR: 10.0.1.0/24
+    PublicSubnet2:
+      CIDR: 10.0.2.0/24
+    PrivateSubnet1:
+      CIDR: 10.0.10.0/24
+    PrivateSubnet2:
+      CIDR: 10.0.11.0/24
+
+  # NODE_ENV=production causes server/aws/config.ts to use bitech_prod_db
+  GlueDatabase:
+    production:
+      Name: bitech_prod_db
+
+# ============================================================
+# RESOURCES
+# ============================================================
+Resources:
+
+  # ----------------------------------------------------------
+  # VPC & NETWORKING
+  # ----------------------------------------------------------
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-igw
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-2
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-nat
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-public-rt
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-private-rt
+
+  DefaultPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # ----------------------------------------------------------
+  # SECURITY GROUPS
+  # ----------------------------------------------------------
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-${Environment}-alb-sg
+      GroupDescription: Allow HTTP/HTTPS from the internet to the ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-alb-sg
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-${Environment}-ec2-sg
+      GroupDescription: Allow ALB traffic and SSH to EC2
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: App traffic from ALB
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH (restrict to your office IP in production)
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-ec2-sg
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${ProjectName}-${Environment}-rds-sg
+      GroupDescription: Allow PostgreSQL from EC2 only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+          Description: PostgreSQL from EC2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-rds-sg
+
+  # ----------------------------------------------------------
+  # RDS POSTGRESQL (production — deletion protection ON)
+  # ----------------------------------------------------------
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for DC4AI production RDS
+      DBSubnetGroupName: !Sub ${ProjectName}-${Environment}-db-subnet-group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-db-subnet-group
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub ${ProjectName}-${Environment}-postgres
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: '15'
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      AllocatedStorage: 50
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-postgres
+
+  # ----------------------------------------------------------
+  # SECRETS MANAGER
+  # ----------------------------------------------------------
+
+  DatabaseUrlSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/${Environment}/database-url
+      Description: PostgreSQL connection string for production
+      SecretString: !Sub
+        - 'postgresql://${Username}:${Password}@${Endpoint}:5432/postgres?sslmode=require'
+        - Username: !Ref DBUsername
+          Password: !Ref DBPassword
+          Endpoint: !GetAtt RDSInstance.Endpoint.Address
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-database-url
+
+  SessionSecretSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/${Environment}/session-secret
+      Description: Express session secret for production
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: secret
+        PasswordLength: 64
+        ExcludePunctuation: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-session-secret
+
+  CognitoPoolIdSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/${Environment}/cognito-pool-id
+      Description: Shared Cognito User Pool ID
+      SecretString: !Ref CognitoUserPoolId
+
+  CognitoClientIdSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/${Environment}/cognito-client-id
+      Description: Shared Cognito Client ID
+      SecretString: !Ref CognitoClientId
+
+  AthenaOutputSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/${Environment}/athena-output
+      Description: Athena output S3 location for production
+      SecretString: !Ref AthenaOutputLocation
+
+  # ----------------------------------------------------------
+  # IAM — EC2 Instance Profile
+  # ----------------------------------------------------------
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-ec2-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: SecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseUrlSecret
+                  - !Ref SessionSecretSecret
+                  - !Ref CognitoPoolIdSecret
+                  - !Ref CognitoClientIdSecret
+                  - !Ref AthenaOutputSecret
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminInitiateAuth
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminDeleteUser
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminUpdateUserAttributes
+                Resource: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+        - PolicyName: GlueAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:GetPartitions
+                Resource: '*'
+        - PolicyName: AthenaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - athena:StartQueryExecution
+                  - athena:GetQueryExecution
+                  - athena:GetQueryResults
+                  - athena:StopQueryExecution
+                  - athena:GetWorkGroup
+                Resource: '*'
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource:
+                  - arn:aws:s3:::bitech-*
+                  - arn:aws:s3:::bitech-*/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+        - PolicyName: LakeFormationAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lakeformation:GetDataAccess
+                  - lakeformation:GrantPermissions
+                  - lakeformation:RevokePermissions
+                  - lakeformation:ListPermissions
+                Resource: '*'
+        - PolicyName: IAMRoleManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRole
+                  - iam:PassRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/DC4AI-*
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: !GetAtt ECRRepository.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-ec2-role
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub ${ProjectName}-${Environment}-ec2-profile
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ----------------------------------------------------------
+  # ECR REPOSITORY
+  # ----------------------------------------------------------
+
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${ProjectName}-${Environment}
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      ImageTagMutability: MUTABLE
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-ecr
+
+  # ----------------------------------------------------------
+  # CLOUDWATCH LOGS
+  # ----------------------------------------------------------
+
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ec2/${ProjectName}-${Environment}
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-app-logs
+
+  # ----------------------------------------------------------
+  # APPLICATION LOAD BALANCER
+  # ----------------------------------------------------------
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-alb
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-alb
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-tg
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 5000
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckPath: /api/health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-tg
+
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # ----------------------------------------------------------
+  # EC2 INSTANCE
+  #
+  # NODE_ENV=production causes server/aws/config.ts to select
+  # bitech_prod_db for all Glue/Athena/LakeFormation calls.
+  # No manual root access needed — everything is bootstrapped
+  # via user-data and subsequent CodePipeline runs.
+  # ----------------------------------------------------------
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - RDSInstance
+      - ALBTargetGroup
+    Properties:
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !Ref EC2KeyPairName
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-app
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+
+          # ---- System packages ----
+          dnf update -y
+          dnf install -y nodejs npm git docker aws-cli jq
+          systemctl enable docker
+          systemctl start docker
+
+          # ---- CloudWatch agent ----
+          dnf install -y amazon-cloudwatch-agent
+
+          # ---- PM2 (process manager for Node.js) ----
+          npm install -g pm2
+
+          # ---- Pull secrets from Secrets Manager ----
+          DATABASE_URL=$(aws secretsmanager get-secret-value \
+            --secret-id ${ProjectName}/${Environment}/database-url \
+            --region ${AWS::Region} --query SecretString --output text)
+
+          SESSION_SECRET=$(aws secretsmanager get-secret-value \
+            --secret-id ${ProjectName}/${Environment}/session-secret \
+            --region ${AWS::Region} --query SecretString --output text | jq -r '.secret')
+
+          COGNITO_USER_POOL_ID=$(aws secretsmanager get-secret-value \
+            --secret-id ${ProjectName}/${Environment}/cognito-pool-id \
+            --region ${AWS::Region} --query SecretString --output text)
+
+          COGNITO_CLIENT_ID=$(aws secretsmanager get-secret-value \
+            --secret-id ${ProjectName}/${Environment}/cognito-client-id \
+            --region ${AWS::Region} --query SecretString --output text)
+
+          ATHENA_OUTPUT_LOCATION=$(aws secretsmanager get-secret-value \
+            --secret-id ${ProjectName}/${Environment}/athena-output \
+            --region ${AWS::Region} --query SecretString --output text)
+
+          # ---- Write environment file (sourced by PM2 on every deploy) ----
+          # NODE_TLS_REJECT_UNAUTHORIZED=0 is required for RDS SSL with self-signed certs.
+          # No AWS credentials here — the EC2 IAM role is used automatically by the SDK.
+          cat > /etc/dc4ai.env << ENVEOF
+          NODE_ENV=production
+          PORT=5000
+          AWS_REGION=${AWS::Region}
+          NODE_TLS_REJECT_UNAUTHORIZED=0
+          DATABASE_URL=$DATABASE_URL
+          SESSION_SECRET=$SESSION_SECRET
+          COGNITO_USER_POOL_ID=$COGNITO_USER_POOL_ID
+          COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
+          ATHENA_OUTPUT_LOCATION=$ATHENA_OUTPUT_LOCATION
+          ENVEOF
+          chmod 600 /etc/dc4ai.env
+
+          # ---- Deploy script (called by CodeDeploy on every pipeline run) ----
+          mkdir -p /opt/dc4ai
+          cat > /opt/dc4ai/deploy.sh << 'DEPLOY'
+          #!/bin/bash
+          set -e
+          REGION=eu-central-1
+          ACCOUNT=${AWS::AccountId}
+          REPO="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com/dc4ai-production"
+
+          # Authenticate to ECR using the instance IAM role
+          aws ecr get-login-password --region $REGION | \
+            docker login --username AWS --password-stdin \
+            "$ACCOUNT.dkr.ecr.$REGION.amazonaws.com"
+
+          # Pull latest image
+          docker pull $REPO:latest
+
+          # Extract the built server bundle
+          docker rm -f temp_dc4ai 2>/dev/null || true
+          docker create --name temp_dc4ai $REPO:latest
+          docker cp temp_dc4ai:/app/dist /opt/dc4ai/dist
+          docker rm temp_dc4ai
+
+          # Start app with PM2 — set -a exports all env vars to child processes
+          set -a
+          source /etc/dc4ai.env
+          set +a
+          cd /opt/dc4ai
+          pm2 delete dc4ai 2>/dev/null || true
+          pm2 start dist/index.cjs --name dc4ai
+          pm2 save
+          pm2 startup systemd -u root --hp /root 2>/dev/null || true
+          systemctl enable pm2-root 2>/dev/null || true
+          DEPLOY
+          chmod +x /opt/dc4ai/deploy.sh
+
+          # ---- CodeDeploy agent ----
+          dnf install -y ruby wget
+          cd /tmp
+          wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
+          chmod +x install
+          ./install auto
+          systemctl enable codedeploy-agent
+          systemctl start codedeploy-agent
+
+          # ---- Register this instance with the ALB target group ----
+          TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+            -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+          INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+            http://169.254.169.254/latest/meta-data/instance-id)
+          aws elbv2 register-targets \
+            --target-group-arn ${ALBTargetGroup} \
+            --targets Id=$INSTANCE_ID,Port=5000 \
+            --region ${AWS::Region} || true
+
+          echo "DC4AI production bootstrap complete"
+
+  # ----------------------------------------------------------
+  # CI/CD PIPELINE  (GitHub → CodeBuild → ECR → EC2 deploy)
+  # ----------------------------------------------------------
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub ${ProjectName}-${Environment}-artifacts-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-codebuild-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                Resource: !GetAtt ECRRepository.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                Resource: !Sub arn:aws:s3:::${ArtifactBucket}/*
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-build
+      Description: Build Docker image for DC4AI production
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: ECR_REPO_NAME
+            Value: !Sub ${ProjectName}-${Environment}
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to ECR...
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - REPOSITORY_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPO_NAME
+                - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+                - IMAGE_TAG=${COMMIT_HASH:=latest}
+            build:
+              commands:
+                - echo Building Docker image...
+                - docker build -t $REPOSITORY_URI:latest -t $REPOSITORY_URI:$IMAGE_TAG .
+            post_build:
+              commands:
+                - echo Pushing image to ECR...
+                - docker push $REPOSITORY_URI:latest
+                - docker push $REPOSITORY_URI:$IMAGE_TAG
+                - echo Writing appspec and deploy scripts...
+                - |
+                  cat > appspec.yml <<'APPSPEC'
+                  version: 0.0
+                  os: linux
+                  hooks:
+                    ApplicationStop:
+                      - location: scripts/stop_app.sh
+                        timeout: 30
+                        runas: root
+                    AfterInstall:
+                      - location: scripts/deploy.sh
+                        timeout: 300
+                        runas: root
+                  APPSPEC
+                - mkdir -p scripts
+                - |
+                  cat > scripts/stop_app.sh <<'STOP'
+                  #!/bin/bash
+                  pm2 stop dc4ai 2>/dev/null || true
+                  STOP
+                - chmod +x scripts/stop_app.sh
+                - |
+                  cat > scripts/deploy.sh <<'DEPLOY'
+                  #!/bin/bash
+                  set -e
+                  /opt/dc4ai/deploy.sh
+                  DEPLOY
+                - chmod +x scripts/deploy.sh
+          artifacts:
+            files:
+              - appspec.yml
+              - scripts/**
+      TimeoutInMinutes: 30
+
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub ${ProjectName}-${Environment}-app
+      ComputePlatform: Server
+
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub ${ProjectName}-${Environment}-dg
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      Ec2TagFilters:
+        - Key: Name
+          Value: !Sub ${ProjectName}-${Environment}-app
+          Type: KEY_AND_VALUE
+      DeploymentStyle:
+        DeploymentType: IN_PLACE
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-codedeploy-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Environment}-codepipeline-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelineAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactBucket}
+                  - !Sub arn:aws:s3:::${ArtifactBucket}/*
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - codedeploy:CreateDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetApplicationRevision
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetDeploymentConfig
+                  - codedeploy:RegisterApplicationRevision
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: !Ref GitHubCodeStarConnectionArn
+
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${ProjectName}-${Environment}-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              Configuration:
+                ConnectionArn: !Ref GitHubCodeStarConnectionArn
+                FullRepositoryId: !Sub ${GitHubOwner}/${GitHubRepo}
+                BranchName: !Ref GitHubBranch
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Build
+          Actions:
+            - Name: BuildDockerImage
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Deploy
+          Actions:
+            - Name: DeployToEC2
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Ref CodeDeployDeploymentGroup
+              InputArtifacts:
+                - Name: BuildOutput
+
+  # ----------------------------------------------------------
+  # CLOUDWATCH ALARMS
+  # ----------------------------------------------------------
+
+  EC2CPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-${Environment}-high-cpu
+      AlarmDescription: EC2 CPU utilization above 80%
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref EC2Instance
+
+  ALB5XXAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${ProjectName}-${Environment}-5xx-errors
+      AlarmDescription: ALB returning 5XX errors
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
+
+# ============================================================
+# OUTPUTS
+# ============================================================
+Outputs:
+
+  ApplicationURL:
+    Description: Public URL of the production application (via ALB)
+    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-AppURL
+
+  EC2InstanceId:
+    Description: EC2 instance ID (use SSM Session Manager — no SSH key needed)
+    Value: !Ref EC2Instance
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-EC2InstanceId
+
+  EC2PublicIP:
+    Description: EC2 public IP
+    Value: !GetAtt EC2Instance.PublicIp
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-EC2PublicIP
+
+  RDSEndpoint:
+    Description: RDS PostgreSQL endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-RDSEndpoint
+
+  ECRRepositoryUri:
+    Description: ECR repository URI (used by CodeBuild)
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-ECRRepositoryUri
+
+  CodePipelineName:
+    Description: CodePipeline name — trigger a release here to deploy
+    Value: !Ref CodePipeline
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-PipelineName
+
+  DatabaseUrlSecretArn:
+    Description: ARN of the DATABASE_URL secret
+    Value: !Ref DatabaseUrlSecret
+    Export:
+      Name: !Sub ${ProjectName}-${Environment}-DatabaseUrlSecretArn
+
+  GlueDatabaseUsed:
+    Description: >
+      Glue / Lake Formation database targeted by the production app.
+      Controlled by NODE_ENV=production in /etc/dc4ai.env,
+      which causes server/aws/config.ts to resolve to bitech_prod_db.
+    Value: !FindInMap [GlueDatabase, production, Name]
