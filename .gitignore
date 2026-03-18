@@ -5,5 +5,11 @@ server/public
 vite.config.ts.*
 *.tar.gz
 
-# CloudFormation parameter files with sensitive values
-cloudformation/*-parameters.json
+# CloudFormation files (contain sensitive infrastructure details, account IDs, credentials)
+cloudformation/
+
+# Pasted assets with sensitive infrastructure details (AWS account IDs, passwords, ECR URIs)
+attached_assets/
+
+# Replit runtime state and workflow logs
+.local/
