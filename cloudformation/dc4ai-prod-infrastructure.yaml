@@ -77,10 +77,10 @@ Parameters:
   # ---- Data / AWS ----
   AthenaOutputLocation:
     Type: String
-    Default: s3://bitech-pbac-data-prd/athena-post-op/
+    Default: s3://bitech-data-prod/athena-post-op/
     Description: >
       S3 location for Athena query results in production.
-      Bucket bitech-pbac-data-prd must exist before deploying.
+      Bucket bitech-data-prod must exist before deploying.
 
   # ---- GitHub CI/CD ----
   GitHubOwner:
