@@ -311,6 +311,9 @@ export default function DataViewerPage() {
       const response = await apiRequest("POST", "/api/query/execute", config);
       return response.json();
     },
+    onSuccess: () => {
+      setCurrentPage(1);
+    },
     onError: (error: Error) => {
       toast({
         title: "Query failed",
