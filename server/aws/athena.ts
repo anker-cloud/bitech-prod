@@ -69,35 +69,54 @@ export async function executeQuery(sql: string, databaseName: string): Promise<Q
 
   await waitForQueryCompletion(queryExecutionId);
 
-  const getResultsCommand = new GetQueryResultsCommand({
-    QueryExecutionId: queryExecutionId,
-  });
+  let columns: string[] = [];
+  const rows: Record<string, unknown>[] = [];
+  let nextToken: string | undefined = undefined;
+  let isFirstPage = true;
 
-  const resultsResponse = await client.send(getResultsCommand);
-  const resultSet = resultsResponse.ResultSet;
-
-  if (!resultSet || !resultSet.Rows || resultSet.Rows.length === 0) {
-    return {
-      columns: [],
-      rows: [],
-      totalRows: 0,
-      executionTimeMs: Date.now() - startTime,
-    };
-  }
-
-  const headerRow = resultSet.Rows[0];
-  const columns = headerRow.Data?.map(cell => cell.VarCharValue || "") || [];
-
-  const rows = resultSet.Rows.slice(1).map(row => {
-    const rowData: Record<string, unknown> = {};
-    row.Data?.forEach((cell, index) => {
-      const columnName = columns[index];
-      if (columnName) {
-        rowData[columnName] = cell.VarCharValue !== undefined ? cell.VarCharValue : null;
-      }
+  do {
+    const getResultsCommand = new GetQueryResultsCommand({
+      QueryExecutionId: queryExecutionId,
+      NextToken: nextToken,
     });
-    return rowData;
-  });
+
+    const resultsResponse = await client.send(getResultsCommand);
+    const resultSet = resultsResponse.ResultSet;
+
+    if (!resultSet || !resultSet.Rows || resultSet.Rows.length === 0) {
+      break;
+    }
+
+    if (isFirstPage) {
+      const headerRow = resultSet.Rows[0];
+      columns = headerRow.Data?.map(cell => cell.VarCharValue || "") ?? [];
+      isFirstPage = false;
+      const dataRows = resultSet.Rows.slice(1);
+      for (const row of dataRows) {
+        const rowData: Record<string, unknown> = {};
+        row.Data?.forEach((cell, index) => {
+          const columnName = columns[index];
+          if (columnName) rowData[columnName] = cell.VarCharValue !== undefined ? cell.VarCharValue : null;
+        });
+        rows.push(rowData);
+      }
+    } else {
+      for (const row of resultSet.Rows) {
+        const rowData: Record<string, unknown> = {};
+        row.Data?.forEach((cell, index) => {
+          const columnName = columns[index];
+          if (columnName) rowData[columnName] = cell.VarCharValue !== undefined ? cell.VarCharValue : null;
+        });
+        rows.push(rowData);
+      }
+    }
+
+    nextToken = resultsResponse.NextToken;
+  } while (nextToken !== undefined);
+
+  if (columns.length === 0) {
+    return { columns: [], rows: [], totalRows: 0, executionTimeMs: Date.now() - startTime };
+  }
 
   return {
     columns,
