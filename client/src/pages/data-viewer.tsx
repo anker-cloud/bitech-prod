@@ -26,9 +26,11 @@ interface TableColumn {
 
 interface QueryResult {
   columns: string[];
-  rows: Record<string, unknown>[];
+  rows: (string | null)[][];
   totalRows: number;
   executionTimeMs: number;
+  limitApplied?: boolean;
+  maxRows?: number;
 }
 
 export default function DataViewerPage() {
@@ -43,6 +45,8 @@ export default function DataViewerPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [rowLimit, setRowLimit] = useState<number>(1000);
+  const [limitWarningDismissed, setLimitWarningDismissed] = useState(false);
   const rowsPerPage = 50;
 
   const accessibleDataSources = useMemo(() => {
@@ -324,7 +328,7 @@ export default function DataViewerPage() {
   });
 
   const handleRunQuery = () => {
-    const sql = queryMode === "custom" ? customSql : generatedSql;
+    let sql = queryMode === "custom" ? customSql : generatedSql;
     if (!sql.trim()) {
       toast({
         title: "No query to run",
@@ -341,6 +345,11 @@ export default function DataViewerPage() {
       });
       return;
     }
+    const hasLimit = /\bLIMIT\s+\d+/i.test(sql);
+    if (!hasLimit) {
+      sql = `${sql.trimEnd()}\nLIMIT ${rowLimit}`;
+    }
+    setLimitWarningDismissed(false);
     queryMutation.mutate({ sql, dataSourceIds: selectedDataSources });
   };
 
@@ -350,7 +359,7 @@ export default function DataViewerPage() {
     const { columns, rows } = queryMutation.data;
     const csvContent = [
       columns.join(","),
-      ...rows.map((row) => columns.map((col) => `"${row[col] ?? ""}"`).join(",")),
+      ...rows.map((row) => row.map((val) => `"${val ?? ""}"`).join(",")),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -414,9 +423,11 @@ export default function DataViewerPage() {
 
   const sortedResults = useMemo(() => {
     if (!queryMutation.data?.rows || !sortColumn) return queryMutation.data?.rows || [];
+    const colIndex = queryMutation.data.columns.indexOf(sortColumn);
+    if (colIndex === -1) return queryMutation.data.rows;
     return [...queryMutation.data.rows].sort((a, b) => {
-      const aVal = a[sortColumn];
-      const bVal = b[sortColumn];
+      const aVal = a[colIndex];
+      const bVal = b[colIndex];
       if (aVal === bVal) return 0;
       if (aVal === null || aVal === undefined) return 1;
       if (bVal === null || bVal === undefined) return -1;
@@ -723,6 +734,20 @@ export default function DataViewerPage() {
                 </pre>
               </div>
             )}
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">Row limit</Label>
+              <Select value={String(rowLimit)} onValueChange={(v) => setRowLimit(Number(v))}>
+                <SelectTrigger className="h-8 flex-1" data-testid="select-row-limit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="500">500</SelectItem>
+                  <SelectItem value="1000">1000</SelectItem>
+                  <SelectItem value="5000">5000</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               className="w-full"
               onClick={handleRunQuery}
@@ -754,6 +779,14 @@ export default function DataViewerPage() {
             </div>
           ) : queryMutation.data ? (
             <>
+              {queryMutation.data.limitApplied && !limitWarningDismissed && (
+                <div className="flex items-center justify-between px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 text-sm text-yellow-800 dark:text-yellow-300" data-testid="banner-limit-applied">
+                  <span>Results capped at {queryMutation.data.maxRows?.toLocaleString()} rows by the server. Add a LIMIT clause to your query to fetch fewer rows.</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-yellow-800 dark:text-yellow-300" onClick={() => setLimitWarningDismissed(true)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
               <div className="p-4 border-b flex items-center justify-between bg-muted/30">
                 <div className="flex items-center gap-4">
                   <Badge variant="secondary" data-testid="badge-row-count">{queryMutation.data.totalRows} rows</Badge>
@@ -810,10 +843,10 @@ export default function DataViewerPage() {
                   <TableBody>
                     {paginatedResults.map((row, rowIndex) => (
                       <TableRow key={rowIndex}>
-                        {queryMutation.data!.columns.map((column) => (
-                          <TableCell key={column} className="font-mono text-sm">
-                            {row[column] !== null && row[column] !== undefined
-                              ? String(row[column])
+                        {row.map((val, colIndex) => (
+                          <TableCell key={colIndex} className="font-mono text-sm">
+                            {val !== null && val !== undefined
+                              ? String(val)
                               : <span className="text-muted-foreground italic">null</span>}
                           </TableCell>
                         ))}

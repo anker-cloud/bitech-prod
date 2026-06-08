@@ -655,12 +655,22 @@ export async function registerRoutes(
         }
       }
 
-      const result = await executeQuery(modifiedSql, getActiveDatabase());
-      res.json(result);
+      const maxRows = parseInt(process.env.QUERY_MAX_ROWS || "10000");
+      const upperSql = modifiedSql.replace(/\s+/g, ' ').toUpperCase();
+      const hasLimit = /\bLIMIT\s+\d+/.test(upperSql);
+      let finalSql = modifiedSql;
+      let limitApplied = false;
+      if (!hasLimit) {
+        finalSql = `SELECT * FROM (${modifiedSql}) __limit_wrapper LIMIT ${maxRows}`;
+        limitApplied = true;
+      }
+
+      const result = await executeQuery(finalSql, getActiveDatabase());
+      res.json({ ...result, limitApplied, maxRows: limitApplied ? maxRows : undefined });
     } catch (error) {
       console.error("Query execution error:", error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : "Query execution failed" 
+      res.status(500).json({
+        message: error instanceof Error ? error.message : "Query execution failed"
       });
     }
   });
@@ -913,12 +923,16 @@ export async function registerRoutes(
 
         const result = await executeQuery(sql, activeDatabase);
 
+        const rowObjects = result.rows.map(row =>
+          Object.fromEntries(result.columns.map((col, i) => [col, row[i]]))
+        );
+
         if (acceptHeader.includes("text/csv")) {
           res.setHeader("Content-Type", "text/csv");
           res.setHeader("Content-Disposition", "attachment; filename=data.csv");
-          if (result.rows.length === 0) return res.send("");
+          if (rowObjects.length === 0) return res.send("");
           const header = result.columns.join(",");
-          const rows = result.rows.map(row =>
+          const rows = rowObjects.map(row =>
             result.columns.map(col => {
               const val = row[col];
               if (val === null || val === undefined) return "";
@@ -939,7 +953,7 @@ export async function registerRoutes(
             executionTimeMs: result.executionTimeMs,
             columns: result.columns,
           },
-          data: result.rows,
+          data: rowObjects,
         });
       }
       // ── END MULTI-SOURCE PATH ─────────────────────────────────────────────
@@ -1049,18 +1063,21 @@ export async function registerRoutes(
       const sql = `SELECT ${columnList} FROM "${resolvedTableName}" ${whereClause} LIMIT ${limit}`;
 
       const result = await executeQuery(sql, activeDatabase);
+      const rowObjects = result.rows.map(row =>
+        Object.fromEntries(result.columns.map((col, i) => [col, row[i]]))
+      );
 
       // Return CSV if requested
       if (acceptHeader.includes("text/csv")) {
         res.setHeader("Content-Type", "text/csv");
         res.setHeader("Content-Disposition", "attachment; filename=data.csv");
-        
-        if (result.rows.length === 0) {
+
+        if (rowObjects.length === 0) {
           return res.send("");
         }
 
         const header = result.columns.join(",");
-        const rows = result.rows.map(row => 
+        const rows = rowObjects.map(row =>
           result.columns.map(col => {
             const val = row[col];
             if (val === null || val === undefined) return "";
@@ -1071,7 +1088,7 @@ export async function registerRoutes(
             return str;
           }).join(",")
         );
-        
+
         return res.send([header, ...rows].join("\n"));
       }
 
@@ -1084,7 +1101,7 @@ export async function registerRoutes(
           executionTimeMs: result.executionTimeMs,
           columns: result.columns,
         },
-        data: result.rows,
+        data: rowObjects,
       });
     } catch (error) {
       console.error("API fetch error:", error);
