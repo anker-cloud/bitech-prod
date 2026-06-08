@@ -5,7 +5,7 @@ import { authenticateUser, createCognitoUser, updateCognitoUser, deleteCognitoUs
 import { createIAMRole, updateIAMRole, deleteIAMRole } from "./aws/iam";
 import { grantLakeFormationPermissions, revokeLakeFormationPermissions, updateLakeFormationPermissions } from "./aws/lakeformation";
 import { getDataSourceSchemas, getDataSourceColumns } from "./aws/glue";
-import { executeQuery } from "./aws/athena";
+import { executeQuery, executeQueryStream } from "./aws/athena";
 import { authMiddleware, adminMiddleware, validateDataSourceAccess, getRowFilters, buildRowFilterWhereClause, type AuthenticatedRequest } from "./middleware/auth";
 import { insertRoleSchema, insertUserSchema, DATA_SOURCES, DATA_SOURCE_SHORT_NAMES, type DataSourcePermission, type Role } from "@shared/schema";
 import { getActiveDatabase } from "./aws/config";
@@ -675,6 +675,129 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/query/execute/stream", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    let closed = false;
+    req.on("close", () => { closed = true; });
+    const ac = new AbortController();
+    req.on("close", () => ac.abort());
+
+    try {
+      const { sql, dataSourceId, dataSourceIds } = req.body;
+      const dsIds: string[] = dataSourceIds || (dataSourceId ? [dataSourceId] : []);
+
+      if (!sql?.trim() || dsIds.length === 0) {
+        res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', message: 'SQL and data source are required' })}\n\n`);
+        res.end();
+        return;
+      }
+
+      const resolvedSources = dsIds.map((id: string) => {
+        const ds = DATA_SOURCES.find(d => d.id === id);
+        if (!ds) throw new Error(`Invalid data source: ${id}`);
+        return ds;
+      });
+
+      for (const id of dsIds) {
+        if (!validateDataSourceAccess(req, id)) {
+          res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', message: 'Access Denied!! You do not have Lake Formation permissions to access this data source.' })}\n\n`);
+          res.end();
+          return;
+        }
+      }
+
+      let modifiedSql = sql;
+      const isMultiTable = dsIds.length > 1;
+
+      if (isMultiTable) {
+        const allFilterClauses: string[] = [];
+        for (let i = 0; i < dsIds.length; i++) {
+          const ds = resolvedSources[i];
+          const alias = `t${i + 1}`;
+          const { allRows, filters } = getRowFilters(req, ds.id, ds.tableName);
+          if (!allRows && filters.length > 0) {
+            const clause = buildRowFilterWhereClause(filters, undefined, alias);
+            if (clause) allFilterClauses.push(`(${clause})`);
+          }
+        }
+        if (allFilterClauses.length > 0) {
+          const combinedFilter = allFilterClauses.join(" AND ");
+          const normalizedSql = sql.replace(/\s+/g, ' ');
+          const upperSql = normalizedSql.toUpperCase();
+          const whereMatch = upperSql.match(/\sWHERE\s/i);
+          const groupByMatch = upperSql.match(/\sGROUP\s+BY\s/i);
+          const orderByMatch = upperSql.match(/\sORDER\s+BY\s/i);
+          const limitMatch = upperSql.match(/\sLIMIT\s/i);
+          const whereIndex = whereMatch ? upperSql.indexOf(whereMatch[0]) : -1;
+          const groupByIndex = groupByMatch ? upperSql.indexOf(groupByMatch[0]) : -1;
+          const orderByIndex = orderByMatch ? upperSql.indexOf(orderByMatch[0]) : -1;
+          const limitIndex = limitMatch ? upperSql.indexOf(limitMatch[0]) : -1;
+          if (whereIndex !== -1 && whereMatch) {
+            const afterWhere = whereIndex + whereMatch[0].length;
+            modifiedSql = normalizedSql.slice(0, afterWhere) + `${combinedFilter} AND (` + normalizedSql.slice(afterWhere) + ")";
+          } else {
+            let insertPosition = normalizedSql.length;
+            if (groupByIndex !== -1) insertPosition = Math.min(insertPosition, groupByIndex);
+            if (orderByIndex !== -1) insertPosition = Math.min(insertPosition, orderByIndex);
+            if (limitIndex !== -1) insertPosition = Math.min(insertPosition, limitIndex);
+            modifiedSql = normalizedSql.slice(0, insertPosition) + ` WHERE ${combinedFilter}` + normalizedSql.slice(insertPosition);
+          }
+        }
+      } else {
+        const ds = resolvedSources[0];
+        const { allRows, filters } = getRowFilters(req, ds.id, ds.tableName);
+        if (!allRows && filters.length > 0) {
+          const rowFilterClause = buildRowFilterWhereClause(filters);
+          if (rowFilterClause) {
+            const normalizedSql = sql.replace(/\s+/g, ' ');
+            const upperSql = normalizedSql.toUpperCase();
+            const whereMatch = upperSql.match(/\sWHERE\s/i);
+            const groupByMatch = upperSql.match(/\sGROUP\s+BY\s/i);
+            const orderByMatch = upperSql.match(/\sORDER\s+BY\s/i);
+            const limitMatch = upperSql.match(/\sLIMIT\s/i);
+            const whereIndex = whereMatch ? upperSql.indexOf(whereMatch[0]) : -1;
+            const groupByIndex = groupByMatch ? upperSql.indexOf(groupByMatch[0]) : -1;
+            const orderByIndex = orderByMatch ? upperSql.indexOf(orderByMatch[0]) : -1;
+            const limitIndex = limitMatch ? upperSql.indexOf(limitMatch[0]) : -1;
+            if (whereIndex !== -1 && whereMatch) {
+              const afterWhere = whereIndex + whereMatch[0].length;
+              modifiedSql = normalizedSql.slice(0, afterWhere) + `(${rowFilterClause}) AND (` + normalizedSql.slice(afterWhere) + ")";
+            } else {
+              let insertPosition = normalizedSql.length;
+              if (groupByIndex !== -1) insertPosition = Math.min(insertPosition, groupByIndex);
+              if (orderByIndex !== -1) insertPosition = Math.min(insertPosition, orderByIndex);
+              if (limitIndex !== -1) insertPosition = Math.min(insertPosition, limitIndex);
+              modifiedSql = normalizedSql.slice(0, insertPosition) + ` WHERE ${rowFilterClause}` + normalizedSql.slice(insertPosition);
+            }
+          }
+        }
+      }
+
+      const maxRows = parseInt(process.env.QUERY_MAX_ROWS || "10000");
+      const upperSql = modifiedSql.replace(/\s+/g, ' ').toUpperCase();
+      const hasLimit = /\bLIMIT\s+\d+/.test(upperSql);
+      let finalSql = modifiedSql;
+      if (!hasLimit) {
+        finalSql = `SELECT * FROM (${modifiedSql}) __limit_wrapper LIMIT ${maxRows}`;
+      }
+
+      for await (const chunk of executeQueryStream(finalSql, getActiveDatabase(), ac.signal)) {
+        if (closed) break;
+        res.write(`event: ${chunk.type}\ndata: ${JSON.stringify(chunk)}\n\n`);
+      }
+      if (!closed) res.end();
+    } catch (error) {
+      if (!closed) {
+        res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Query execution failed' })}\n\n`);
+        res.end();
+      }
+    }
+  });
+
   // API Key Management Routes
   app.get("/api/api-keys", authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -918,7 +1041,7 @@ export async function registerRoutes(
         }
 
         const whereClause = filterClauses.length > 0 ? `WHERE ${filterClauses.join(" AND ")}` : "";
-        const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
+        const limit = parseInt(req.query.limit as string) || 100;
         sql += `\n${whereClause}\nLIMIT ${limit}`;
 
         const result = await executeQuery(sql, activeDatabase);

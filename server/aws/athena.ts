@@ -121,6 +121,89 @@ export async function executeQuery(sql: string, databaseName: string): Promise<Q
   };
 }
 
+export type StreamChunk =
+  | { type: 'columns'; columns: string[] }
+  | { type: 'rows'; rows: (string | null)[][]; pageIndex: number; cumulativeRows: number }
+  | { type: 'complete'; totalRows: number; executionTimeMs: number }
+  | { type: 'error'; message: string }
+
+export async function* executeQueryStream(
+  sql: string,
+  databaseName: string,
+  signal?: AbortSignal
+): AsyncGenerator<StreamChunk> {
+  const startTime = Date.now();
+
+  try {
+    const startCommand = new StartQueryExecutionCommand({
+      QueryString: sql,
+      QueryExecutionContext: { Database: databaseName },
+      ResultConfiguration: { OutputLocation: outputLocation },
+    });
+
+    const startResponse = await client.send(startCommand);
+    const queryExecutionId = startResponse.QueryExecutionId;
+
+    if (!queryExecutionId) {
+      yield { type: 'error', message: 'Failed to start query execution' };
+      return;
+    }
+
+    await waitForQueryCompletion(queryExecutionId);
+
+    let columns: string[] = [];
+    let nextToken: string | undefined = undefined;
+    let isFirstPage = true;
+    let pageIndex = 0;
+    let cumulativeRows = 0;
+
+    do {
+      if (signal?.aborted) break;
+
+      const getResultsCommand = new GetQueryResultsCommand({
+        QueryExecutionId: queryExecutionId,
+        NextToken: nextToken,
+      });
+
+      const resultsResponse = await client.send(getResultsCommand);
+      const resultSet = resultsResponse.ResultSet;
+
+      if (!resultSet || !resultSet.Rows || resultSet.Rows.length === 0) break;
+
+      let pageRows: (string | null)[][];
+
+      if (isFirstPage) {
+        const headerRow = resultSet.Rows[0];
+        columns = headerRow.Data?.map(cell => cell.VarCharValue || '') ?? [];
+        yield { type: 'columns', columns };
+        isFirstPage = false;
+        pageRows = resultSet.Rows.slice(1).map(row =>
+          columns.map((_, index) => {
+            const cell = row.Data?.[index];
+            return cell?.VarCharValue !== undefined ? cell.VarCharValue : null;
+          })
+        );
+      } else {
+        pageRows = resultSet.Rows.map(row =>
+          columns.map((_, index) => {
+            const cell = row.Data?.[index];
+            return cell?.VarCharValue !== undefined ? cell.VarCharValue : null;
+          })
+        );
+      }
+
+      cumulativeRows += pageRows.length;
+      yield { type: 'rows', rows: pageRows, pageIndex, cumulativeRows };
+      pageIndex++;
+      nextToken = resultsResponse.NextToken;
+    } while (nextToken !== undefined);
+
+    yield { type: 'complete', totalRows: cumulativeRows, executionTimeMs: Date.now() - startTime };
+  } catch (error) {
+    yield { type: 'error', message: error instanceof Error ? error.message : 'Query execution failed' };
+  }
+}
+
 export async function validateQuery(sql: string, databaseName: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const startCommand = new StartQueryExecutionCommand({
