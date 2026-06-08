@@ -28,9 +28,9 @@ COPY --from=builder /app/package*.json ./
 RUN npm ci --omit=dev
 
 # The container is used as an artefact carrier by the CodeDeploy deploy script:
-#   docker cp dc4ai-extract:/app/dist       /opt/dc4ai/dist
-#   docker cp dc4ai-extract:/app/package.json /opt/dc4ai/package.json
-#   docker cp dc4ai-extract:/app/node_modules /opt/dc4ai/node_modules
+#   docker cp temp_dc4ai:/app/dist         /opt/dc4ai/dist
+#   docker cp temp_dc4ai:/app/package.json /opt/dc4ai/package.json
+#   docker cp temp_dc4ai:/app/node_modules /opt/dc4ai/node_modules
 # PM2 then starts the app on the EC2 host — not inside the container.
 # A CMD is defined here so the image is also runnable directly if needed.
 EXPOSE 5000
