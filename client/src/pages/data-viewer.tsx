@@ -38,8 +38,6 @@ export default function DataViewerPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [rowLimit, setRowLimit] = useState<number>(1000);
-  const [limitWarningDismissed, setLimitWarningDismissed] = useState(false);
   const rowsPerPage = 50;
 
   const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
@@ -321,7 +319,6 @@ export default function DataViewerPage() {
     setExecutionTimeMs(null);
     setStreamError(null);
     setCurrentPage(1);
-    setLimitWarningDismissed(false);
 
     try {
       const response = await fetch('/api/query/execute/stream', {
@@ -403,10 +400,6 @@ export default function DataViewerPage() {
         variant: "destructive",
       });
       return;
-    }
-    const hasLimit = /\bLIMIT\s+\d+/i.test(sql);
-    if (!hasLimit) {
-      sql = `${sql.trimEnd()}\nLIMIT ${rowLimit}`;
     }
     executeStreamingQuery(sql, selectedDataSources);
   };
@@ -791,20 +784,6 @@ export default function DataViewerPage() {
                 </pre>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <Label className="text-xs text-muted-foreground whitespace-nowrap">Row limit</Label>
-              <Select value={String(rowLimit)} onValueChange={(v) => setRowLimit(Number(v))}>
-                <SelectTrigger className="h-8 flex-1" data-testid="select-row-limit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="100">100</SelectItem>
-                  <SelectItem value="500">500</SelectItem>
-                  <SelectItem value="1000">1000</SelectItem>
-                  <SelectItem value="5000">5000</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <Button
               className="w-full"
               onClick={handleRunQuery}

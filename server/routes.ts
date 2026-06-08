@@ -777,15 +777,7 @@ export async function registerRoutes(
         }
       }
 
-      const maxRows = parseInt(process.env.QUERY_MAX_ROWS || "10000");
-      const upperSql = modifiedSql.replace(/\s+/g, ' ').toUpperCase();
-      const hasLimit = /\bLIMIT\s+\d+/.test(upperSql);
-      let finalSql = modifiedSql;
-      if (!hasLimit) {
-        finalSql = `SELECT * FROM (${modifiedSql}) __limit_wrapper LIMIT ${maxRows}`;
-      }
-
-      for await (const chunk of executeQueryStream(finalSql, getActiveDatabase(), ac.signal)) {
+      for await (const chunk of executeQueryStream(modifiedSql, getActiveDatabase(), ac.signal)) {
         if (closed) break;
         res.write(`event: ${chunk.type}\ndata: ${JSON.stringify(chunk)}\n\n`);
       }
