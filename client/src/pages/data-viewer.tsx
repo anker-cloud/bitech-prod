@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { DATA_SOURCES, filterOperators, type DataSourceId, type QueryFilter, type QueryConfig } from "@shared/schema";
@@ -46,6 +47,8 @@ export default function DataViewerPage() {
   const [executionTimeMs, setExecutionTimeMs] = useState<number | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const isStreamingActive = streamStatus === 'executing' || streamStatus === 'streaming';
 
   const accessibleDataSources = useMemo(() => {
     if (!user?.role?.permissions) return [];
@@ -529,11 +532,31 @@ export default function DataViewerPage() {
           <h1 className="text-lg font-semibold">Data Viewer</h1>
         </div>
         <div className="flex items-center gap-2">
-          {streamRows.length > 0 && (
-            <Button variant="outline" size="sm" onClick={handleExportCsv} data-testid="button-export-csv">
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+          {streamColumns.length > 0 && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className={isStreamingActive ? "cursor-not-allowed" : undefined}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportCsv}
+                      data-testid="button-export-csv"
+                      disabled={isStreamingActive}
+                      className={isStreamingActive ? "pointer-events-none" : undefined}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isStreamingActive && (
+                  <TooltipContent>
+                    Export will be available once the Query Execution is complete
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           )}
           <Button
             variant="ghost"
