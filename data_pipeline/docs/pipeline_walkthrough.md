@@ -325,5 +325,3 @@ In short: **when the schema stays the same, existing sources scale without code 
 - **Glue jobs:** `etl-job-policy-table`, `glue-etl-prd-crime-data-glue-bronze_to_silver`, `glue-etl-prd-event-data-glue-bronze_to_silver`, `glue-etl-prd-traffic-data-glue-bronze_to_silver`, `glue-prd-weather-data-bronze_silver_v2`
 - **Glue / Lake Formation databases:** `bitech_prod_db`, `bitech_staging_db`, `crime-data-db`, `events-data-db`, `insurance-data-db`, `traffic-data-db`, `weather-data-db`
 - **Key Lambdas:** `BiTech-Data-extractor`, `start-glue-crawlers`, `check-glue-crawlers-status`
-
-> Internal resource identifiers (account ID, S3 bucket names, IAM users, and IAM role names) are intentionally omitted from this client document. They are available separately to authorized personnel.
