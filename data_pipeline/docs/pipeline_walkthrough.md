@@ -3,7 +3,7 @@
 A complete, end-to-end walkthrough of the BiTech data pipeline as it is deployed in AWS. This document is intended for the client and ties together every component — EventBridge, Step Functions, Glue jobs, crawlers, and Lambda functions — into one clear picture.
 
 > All details below were verified against the live AWS environment.
-> **Region:** `eu-central-1` · **Data bucket:** `<data-bucket>`
+> **Region:** `eu-central-1` · **Data bucket:** `s3://bitech-pbac-data-prd/`
 
 ---
 
@@ -65,10 +65,10 @@ GOLD (business/aggregated) + Athena / BI consumption
 
 Read in order: **Bronze → Silver (Section 2–5)**, then the **Glue jobs that transform the data (Section 5)**, then the **Glue Crawler step (Section 6)**, then **Lake Formation tables & permissions (Section 6.4–6.5)**.
 
-All data lives in the project data bucket (`<data-bucket>`), organized by domain, each with a Bronze / Silver / Gold layer:
+All data lives in `s3://bitech-pbac-data-prd/`, organized by domain, each with a Bronze / Silver / Gold layer:
 
 ```
-<data-bucket>/
+bitech-pbac-data-prd/
 ├── traffic-data/      → bronze/  silver/  gold/
 ├── event-data/        → bronze/  silver/  gold/
 ├── crime-data/        → bronze/  silver/  gold/
@@ -165,7 +165,7 @@ Each crawler is defined once (via console / IaC) with the following configuratio
 | Setting | Value |
 |---------|-------|
 | **Target database** | `bitech_prod_db` |
-| **S3 target path** | `<data-bucket>/traffic-data/silver/` |
+| **S3 target path** | `s3://bitech-pbac-data-prd/traffic-data/silver/` |
 | **IAM role** | Dedicated Glue crawler role |
 | **Table prefix** | `traffic_data_` (so the table is e.g. `traffic_data_silver`) |
 | **Schema change policy** | Update: `UPDATE_IN_DATABASE`, Delete: `DEPRECATE_IN_DATABASE` |
