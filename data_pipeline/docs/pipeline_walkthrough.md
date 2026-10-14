@@ -260,7 +260,7 @@ This gives a central, auditable place to answer "who can query the crime data ta
 
 **Required schema must be clearly defined.** For every data source being onboarded, the **required schema** (expected columns and their types) should be defined up front. The **ETL process should prepare the Silver data according to this expected structure.** The **Glue Crawler then discovers and infers the schema from the Silver data** and registers it in the Glue Data Catalog. A stable, agreed schema per domain keeps queries and dashboards reliable as new data arrives.
 
-**Extra columns are fine.** Source systems may provide additional columns beyond the required set. These can be carried through the extraction or ETL process where needed. The important point is that the **Silver data is prepared with the expected structure** so that the **Glue Crawler can correctly discover and register the table schema.**
+**Extra columns are fine, but require ETL code changes.** Source systems may provide additional columns beyond the required set. These can be carried through the extraction or ETL process where needed — but this is **not automatic**: adding (or changing) which columns land in the Silver layer requires **code-level changes to the ETL script** for that data source, so the new columns are explicitly selected, cleaned, and written. Once the ETL is updated and the Silver data is prepared with the expected structure, the **Glue Crawler then discovers and registers the updated table schema** on its next run. In short, the crawler reflects whatever structure the ETL produces — it does not add columns on its own.
 
 ### Scaling the Platform — Two Scenarios
 
