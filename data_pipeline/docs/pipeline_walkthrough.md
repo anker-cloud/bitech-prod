@@ -202,7 +202,7 @@ WaitForCrawlers      (wait 60s)
 check-glue-crawlers-status (Lambda) → glue.get_crawler() for each; all_done?
         │
         ├── not done → loop back to wait
-        └── all done → catalog is refreshed ✅
+        └── all done → catalog is refreshed 
 ```
 
 Because the orchestrator loops on `check-glue-crawlers-status` until `all_done = true`, the pipeline only reports success once **every table in the catalog reflects the latest Silver data**.
@@ -264,7 +264,7 @@ This gives a central, auditable place to answer "who can query the crime data ta
 
 ### Scaling the Platform — Two Scenarios
 
-**Scenario 1 — Expanding an existing data source to all of Germany (no code change needed).**
+**Scenario 1 — Expanding an existing data source to all of Germany (no code change needed when the schema remains the same).**
 The current codebase can handle data for the **whole of Germany** for an existing source **without any code changes, as long as the schema stays the same**. The ETL jobs and crawlers operate on the *structure* of the data, not on geography — so additional data from other regions (beyond NRW) simply flows through the same Bronze → Silver → Crawler → Catalog pipeline. The existing German-specific handling in the ETL (e.g. German month-name parsing, umlaut normalization) already applies, so no changes are required to scale coverage.
 
 **Scenario 2 — Onboarding a brand-new data source (new ETL + new crawler needed).**
