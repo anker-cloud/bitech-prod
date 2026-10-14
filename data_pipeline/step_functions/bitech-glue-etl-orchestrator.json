@@ -1,0 +1,163 @@
+{
+  "StartAt": "RunGlueJobs",
+  "States": {
+    "RunGlueJobs": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "CrimeJob",
+          "States": {
+            "CrimeJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "glue-etl-prd-crime-data-glue-bronze_to_silver"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "EventJob",
+          "States": {
+            "EventJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "glue-etl-prd-event-data-glue-bronze_to_silver"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "WeatherJob",
+          "States": {
+            "WeatherJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "glue-prd-weather-data-bronze_silver_v2"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "PolicyJob",
+          "States": {
+            "PolicyJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "etl-job-policy-table"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "TrafficJob",
+          "States": {
+            "TrafficJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "glue-etl-prd-traffic-data-glue-bronze_to_silver"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.TaskFailed"
+                  ],
+                  "IntervalSeconds": 30,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "StartCrawlers"
+    },
+    "StartCrawlers": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "start-glue-crawlers",
+        "Payload": {}
+      },
+      "Next": "WaitForCrawlers"
+    },
+    "WaitForCrawlers": {
+      "Type": "Wait",
+      "Seconds": 60,
+      "Next": "CheckCrawlerStatus"
+    },
+    "CheckCrawlerStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "check-glue-crawlers-status",
+        "Payload": {}
+      },
+      "Next": "CrawlerDecision"
+    },
+    "CrawlerDecision": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Payload.all_done",
+          "BooleanEquals": true,
+          "Next": "SuccessState"
+        }
+      ],
+      "Default": "WaitForCrawlers"
+    },
+    "SuccessState": {
+      "Type": "Succeed"
+    }
+  }
+}

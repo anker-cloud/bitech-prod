@@ -1,0 +1,60 @@
+{
+  "Comment": "BiTech Data Pipeline - Sequential Execution",
+  "StartAt": "TrafficModule",
+  "States": {
+    "TrafficModule": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:072012508476:function:BiTech-Data-extractor",
+        "Payload": {
+          "step": "traffic"
+        }
+      },
+      "Next": "EventsModule",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ]
+    },
+    "EventsModule": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:072012508476:function:BiTech-Data-extractor",
+        "Payload": {
+          "step": "events"
+        }
+      },
+      "Next": "CrimeModule"
+    },
+    "CrimeModule": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:072012508476:function:BiTech-Data-extractor",
+        "Payload": {
+          "step": "crime"
+        }
+      },
+      "Next": "WeatherModule"
+    },
+    "WeatherModule": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:eu-central-1:072012508476:function:BiTech-Data-extractor",
+        "Payload": {
+          "step": "weather"
+        }
+      },
+      "End": true
+    }
+  }
+}
