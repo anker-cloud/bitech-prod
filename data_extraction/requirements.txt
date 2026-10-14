@@ -1,0 +1,15 @@
+pandas
+requests
+openmeteo-requests
+requests-cache
+retry-requests
+beautifulsoup4
+selenium==4.18.1
+python-dotenv
+openai
+lxml
+boto3
+scipy
+s3fs
+tqdm
+geopy==2.4.1
